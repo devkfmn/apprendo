@@ -9,8 +9,10 @@ import {
   createUserProfile,
   getInvite,
   linkCoachLearner,
+  linkObserverLearner,
   markInviteUsed,
 } from '@/features/auth/api'
+import { roleHome } from '@/lib/utils'
 
 export function SignupPage() {
   const navigate = useNavigate()
@@ -46,8 +48,15 @@ export function SignupPage() {
       if (invite.role === 'learner' && invite.coachId) {
         await linkCoachLearner(invite.coachId, credential.user.uid)
       }
+      if (invite.role === 'observer' && invite.learnerIds?.length) {
+        await Promise.all(
+          invite.learnerIds.map((learnerId) =>
+            linkObserverLearner(credential.user.uid, learnerId),
+          ),
+        )
+      }
       await markInviteUsed(invite.code)
-      navigate(invite.role === 'coach' ? '/coach' : '/', { replace: true })
+      navigate(roleHome(invite.role), { replace: true })
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Konto konnte nicht erstellt werden.')
     } finally {

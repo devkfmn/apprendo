@@ -3,6 +3,7 @@ import { NavLink, Outlet, useParams } from 'react-router-dom'
 import { BrandLogo } from '@/components/brand/BrandLogo'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/features/auth/useAuth'
+import { roleLabel, viewerAreaBase } from '@/lib/utils'
 
 const learnerLinks = [
   ['Übersicht', '/'],
@@ -16,28 +17,32 @@ const learnerLinks = [
 export function AppShell({ children }: { children?: ReactNode }) {
   const { profile, logout } = useAuth()
   const { learnerId } = useParams()
-  const isCoach = profile?.role === 'coach'
-  const links = isCoach ? [['Lernende', '/coach'] as const] : learnerLinks
-  const learnerLinksForCoach = learnerId
-    ? [
-        ['Übersicht', `/coach/learners/${learnerId}`],
-        ['Wochenrückblicke', `/coach/learners/${learnerId}/journal`],
-        ['Lernberichte', `/coach/learners/${learnerId}/reports`],
-        ['Ziele', `/coach/learners/${learnerId}/goals`],
-        ['Roadmap', `/coach/learners/${learnerId}/roadmap`],
-        ['Semester', `/coach/learners/${learnerId}/semesters`],
-      ]
-    : []
+  const areaBase = profile ? viewerAreaBase(profile.role) : null
+  const isViewer = Boolean(areaBase)
+  const links = isViewer
+    ? ([['Lernende', areaBase!] as const])
+    : learnerLinks
+  const learnerLinksForViewer =
+    isViewer && learnerId
+      ? [
+          ['Übersicht', `${areaBase}/learners/${learnerId}`],
+          ['Wochenrückblicke', `${areaBase}/learners/${learnerId}/journal`],
+          ['Lernberichte', `${areaBase}/learners/${learnerId}/reports`],
+          ['Ziele', `${areaBase}/learners/${learnerId}/goals`],
+          ['Roadmap', `${areaBase}/learners/${learnerId}/roadmap`],
+          ['Semester', `${areaBase}/learners/${learnerId}/semesters`],
+        ]
+      : []
 
   return (
     <div className="min-h-screen">
       <header className="border-b border-line bg-panel/90">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-4">
-          <BrandLogo to={isCoach ? '/coach' : '/'} size="md" />
+          <BrandLogo to={areaBase ?? '/'} size="md" />
           <div className="flex items-center gap-3 text-sm">
             <span className="text-right">
               <strong className="block font-semibold">{profile?.displayName}</strong>
-              <span className="capitalize text-ink-muted">{profile?.role}</span>
+              <span className="text-ink-muted">{roleLabel(profile?.role)}</span>
             </span>
             <Button variant="outline" size="sm" onClick={() => void logout()}>
               Abmelden
@@ -51,7 +56,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
             <NavLink
               key={href}
               to={href}
-              end={href === '/' || href === '/coach'}
+              end={href === '/' || href === '/coach' || href === '/beobachter'}
               className={({ isActive }) =>
                 `rounded-md px-3 py-2 text-sm font-medium ${isActive ? 'bg-brand text-white' : 'text-ink-muted hover:bg-brand-soft'}`
               }
@@ -60,12 +65,12 @@ export function AppShell({ children }: { children?: ReactNode }) {
             </NavLink>
           ))}
         </nav>
-        {learnerLinksForCoach.length > 0 && (
+        {learnerLinksForViewer.length > 0 && (
           <nav
             className="mb-8 flex flex-wrap gap-1 border-b border-line pb-4"
             aria-label="Lernendenavigation"
           >
-            {learnerLinksForCoach.map(([label, href]) => (
+            {learnerLinksForViewer.map(([label, href]) => (
               <NavLink
                 key={href}
                 to={href}

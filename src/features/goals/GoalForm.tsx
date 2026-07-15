@@ -1,27 +1,19 @@
 import { Button } from '@/components/ui/button'
+import { DateInput } from '@/components/ui/date-input'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { goalStatusLabels } from '@/features/semesters/labels'
-import type { GoalStatus, Semester, SemesterGoal } from '@/types/domain'
+import type { Semester, SemesterGoal } from '@/types/domain'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useForm } from 'react-hook-form'
+import { Controller, useForm } from 'react-hook-form'
 import { z } from 'zod'
 
 const goalSchema = z.object({
   semesterId: z.string().min(1, 'Semester erforderlich'),
   title: z.string().min(1, 'Titel erforderlich'),
   description: z.string().min(1, 'Beschreibung erforderlich'),
-  status: z.enum([
-    'open',
-    'in_progress',
-    'completed',
-    'not_completed',
-    'carried_over',
-  ] as const),
   dueDate: z.string().optional(),
-  completionNote: z.string().optional(),
   sortOrder: z.number().int().min(0),
 })
 
@@ -35,9 +27,7 @@ type GoalFormProps = {
     semesterId: string
     title: string
     description: string
-    status: GoalStatus
     dueDate?: string | null
-    completionNote?: string | null
     sortOrder: number
   }) => Promise<void>
   onCancel: () => void
@@ -52,6 +42,7 @@ export function GoalForm({
 }: GoalFormProps) {
   const {
     register,
+    control,
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<GoalFormValues>({
@@ -60,9 +51,7 @@ export function GoalForm({
       semesterId: goal?.semesterId ?? defaultSemesterId ?? '',
       title: goal?.title ?? '',
       description: goal?.description ?? '',
-      status: goal?.status ?? 'open',
       dueDate: goal?.dueDate ?? '',
-      completionNote: goal?.completionNote ?? '',
       sortOrder: goal?.sortOrder ?? 0,
     },
   })
@@ -72,9 +61,7 @@ export function GoalForm({
       semesterId: values.semesterId,
       title: values.title,
       description: values.description,
-      status: values.status,
       dueDate: values.dueDate?.trim() || null,
-      completionNote: values.completionNote?.trim() || null,
       sortOrder: values.sortOrder,
     })
   })
@@ -112,39 +99,30 @@ export function GoalForm({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="status">Status</Label>
-          <Select id="status" {...register('status')}>
-            {(Object.keys(goalStatusLabels) as GoalStatus[]).map((status) => (
-              <option key={status} value={status}>
-                {goalStatusLabels[status]}
-              </option>
-            ))}
-          </Select>
+          <Label htmlFor="dueDate">Fälligkeitsdatum (optional)</Label>
+          <Controller
+            name="dueDate"
+            control={control}
+            render={({ field }) => (
+              <DateInput
+                id="dueDate"
+                value={field.value ?? ''}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+                name={field.name}
+              />
+            )}
+          />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="dueDate">Fälligkeitsdatum (optional)</Label>
-          <Input id="dueDate" type="date" {...register('dueDate')} />
+          <Label htmlFor="sortOrder">Reihenfolge</Label>
+          <Input
+            id="sortOrder"
+            type="number"
+            min={0}
+            {...register('sortOrder', { valueAsNumber: true })}
+          />
         </div>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="sortOrder">Reihenfolge</Label>
-        <Input
-          id="sortOrder"
-          type="number"
-          min={0}
-          {...register('sortOrder', { valueAsNumber: true })}
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="completionNote">Abschlussnotiz (optional)</Label>
-        <Textarea
-          id="completionNote"
-          rows={2}
-          placeholder="Notiz beim Abschliessen des Ziels…"
-          {...register('completionNote')}
-        />
       </div>
 
       <div className="flex justify-end gap-2">

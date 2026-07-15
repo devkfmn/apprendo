@@ -5,17 +5,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { semesterStatusLabels } from '@/features/semesters/labels'
 import { useSemesters } from '@/features/semesters/useSemesters'
 import { useAuth } from '@/features/auth/useAuth'
-import { format } from 'date-fns'
-import { de } from 'date-fns/locale'
+import { formatDate } from '@/lib/utils'
 import type { SemesterStatus } from '@/types/domain'
-
-function formatDate(iso: string): string {
-  try {
-    return format(new Date(iso), 'd. MMM yyyy', { locale: de })
-  } catch {
-    return iso
-  }
-}
 
 export function SemestersPage() {
   const { profile } = useAuth()

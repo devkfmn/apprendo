@@ -10,6 +10,7 @@ const badgeVariants = cva(
         default: 'bg-brand-soft text-brand',
         secondary: 'bg-canvas text-ink-muted',
         outline: 'border border-line bg-panel text-ink-muted',
+        warning: 'bg-accent-soft text-accent',
       },
     },
     defaultVariants: { variant: 'default' },

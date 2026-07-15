@@ -1,79 +1,133 @@
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Textarea } from '@/components/ui/textarea'
 import { updateGoal } from '@/features/goals/api'
-import { goalStatusLabels } from '@/features/semesters/labels'
-import type { GoalStatus, Semester, SemesterGoal } from '@/types/domain'
-import { format } from 'date-fns'
-import { de } from 'date-fns/locale'
+import {
+  goalAssessmentBadgeLabel,
+  goalAssessmentGrades,
+  goalAssessmentLabels,
+} from '@/features/semesters/labels'
+import { formatDate } from '@/lib/utils'
+import type { GoalAssessmentGrade, Semester, SemesterGoal } from '@/types/domain'
 import { Pencil } from 'lucide-react'
 import { useState } from 'react'
 
-function formatDate(iso: string | null | undefined): string | null {
-  if (!iso) return null
-  try {
-    return format(new Date(iso), 'd. MMM yyyy', { locale: de })
-  } catch {
-    return iso
-  }
-}
-
 type GoalRowProps = {
   goal: SemesterGoal
-  readOnly: boolean
+  /** Content edit (title etc.) — coach only. */
+  canEditContent: boolean
+  /** Assessment A–E — coach only; learners/observers always false. */
+  canAssess: boolean
   learnerId: string
+  actorId?: string
   onEdit?: (goal: SemesterGoal) => void
 }
 
-function GoalRow({ goal, readOnly, learnerId, onEdit }: GoalRowProps) {
+function GoalRow({
+  goal,
+  canEditContent,
+  canAssess,
+  learnerId,
+  actorId,
+  onEdit,
+}: GoalRowProps) {
   const [updating, setUpdating] = useState(false)
+  const [note, setNote] = useState(goal.assessmentNote ?? '')
 
-  const handleStatusChange = async (status: GoalStatus) => {
+  const saveAssessment = async (grade: GoalAssessmentGrade | null) => {
     setUpdating(true)
     try {
-      await updateGoal(learnerId, goal.id, { status })
+      await updateGoal(
+        learnerId,
+        goal.id,
+        {
+          assessmentGrade: grade,
+          assessmentNote: note.trim() || null,
+        },
+        actorId,
+      )
     } finally {
       setUpdating(false)
     }
   }
 
-  const dueLabel = formatDate(goal.dueDate)
+  const dueLabel = goal.dueDate ? formatDate(goal.dueDate) : null
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-line bg-panel p-4 sm:flex-row sm:items-start sm:justify-between">
-      <div className="min-w-0 flex-1 space-y-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <h4 className="font-medium">{goal.title}</h4>
-          {readOnly ? (
-            <Badge>{goalStatusLabels[goal.status]}</Badge>
-          ) : (
+    <div className="flex flex-col gap-3 rounded-lg border border-line bg-panel p-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h4 className="font-medium">{goal.title}</h4>
+            {goal.carriedOver ? <Badge variant="secondary">Übertragen</Badge> : null}
+            {!canAssess ? (
+              <Badge variant={goal.assessmentGrade ? 'default' : 'warning'}>
+                {goal.assessmentGrade
+                  ? `${goal.assessmentGrade}) ${goalAssessmentLabels[goal.assessmentGrade]}`
+                  : 'Ohne Beurteilung'}
+              </Badge>
+            ) : null}
+          </div>
+          <p className="text-sm text-ink-muted">{goal.description}</p>
+          {dueLabel ? <p className="text-xs text-ink-muted">Fällig: {dueLabel}</p> : null}
+          {!canAssess && goal.assessmentNote ? (
+            <p className="text-xs text-ink-muted">Notiz: {goal.assessmentNote}</p>
+          ) : null}
+        </div>
+        {canEditContent && onEdit ? (
+          <Button variant="ghost" size="sm" onClick={() => onEdit(goal)}>
+            <Pencil className="size-4" />
+            <span className="sr-only">Bearbeiten</span>
+          </Button>
+        ) : null}
+      </div>
+
+      {canAssess ? (
+        <div className="space-y-3 border-t border-line pt-3">
+          <div className="space-y-2">
+            <Label htmlFor={`assess-${goal.id}`}>Beurteilung (Coach)</Label>
             <Select
-              value={goal.status}
+              id={`assess-${goal.id}`}
+              value={goal.assessmentGrade ?? ''}
               disabled={updating}
-              className="h-8 w-auto min-w-[10rem] text-xs"
-              onChange={(e) => void handleStatusChange(e.target.value as GoalStatus)}
+              onChange={(e) => {
+                const value = e.target.value
+                void saveAssessment(value ? (value as GoalAssessmentGrade) : null)
+              }}
             >
-              {(Object.keys(goalStatusLabels) as GoalStatus[]).map((status) => (
-                <option key={status} value={status}>
-                  {goalStatusLabels[status]}
+              <option value="">Noch nicht beurteilt</option>
+              {goalAssessmentGrades.map((grade) => (
+                <option key={grade} value={grade}>
+                  {grade}) {goalAssessmentLabels[grade]}
                 </option>
               ))}
             </Select>
-          )}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor={`note-${goal.id}`}>Beurteilungsnotiz (optional)</Label>
+            <Textarea
+              id={`note-${goal.id}`}
+              rows={2}
+              value={note}
+              disabled={updating}
+              onChange={(e) => setNote(e.target.value)}
+              onBlur={() => {
+                if ((goal.assessmentNote ?? '') === note.trim()) return
+                void updateGoal(
+                  learnerId,
+                  goal.id,
+                  { assessmentNote: note.trim() || null },
+                  actorId,
+                )
+              }}
+              placeholder="Kurzbegründung zur Beurteilung…"
+            />
+          </div>
         </div>
-        <p className="text-sm text-ink-muted">{goal.description}</p>
-        {dueLabel ? <p className="text-xs text-ink-muted">Fällig: {dueLabel}</p> : null}
-        {goal.completionNote ? (
-          <p className="text-xs text-ink-muted">Notiz: {goal.completionNote}</p>
-        ) : null}
-      </div>
-      {!readOnly && onEdit ? (
-        <Button variant="ghost" size="sm" onClick={() => onEdit(goal)}>
-          <Pencil className="size-4" />
-          <span className="sr-only">Bearbeiten</span>
-        </Button>
       ) : null}
     </div>
   )
@@ -84,7 +138,9 @@ type GoalListProps = {
   semesters: Semester[]
   activeSemesterId?: string | null
   learnerId: string
-  readOnly?: boolean
+  actorId?: string
+  /** Coach can edit goal content and assess. */
+  canEdit?: boolean
   loading?: boolean
   onEditGoal?: (goal: SemesterGoal) => void
 }
@@ -94,7 +150,8 @@ export function GoalList({
   semesters,
   activeSemesterId,
   learnerId,
-  readOnly = false,
+  actorId,
+  canEdit = false,
   loading = false,
   onEditGoal,
 }: GoalListProps) {
@@ -147,8 +204,10 @@ export function GoalList({
               <GoalRow
                 key={goal.id}
                 goal={goal}
-                readOnly={readOnly}
+                canEditContent={canEdit}
+                canAssess={canEdit}
                 learnerId={learnerId}
+                actorId={actorId}
                 onEdit={onEditGoal}
               />
             ))}
@@ -175,7 +234,8 @@ export function GoalList({
                         <GoalRow
                           key={goal.id}
                           goal={goal}
-                          readOnly
+                          canEditContent={false}
+                          canAssess={false}
                           learnerId={learnerId}
                         />
                       ))}
@@ -191,15 +251,24 @@ export function GoalList({
   )
 }
 
-export function countGoalsByStatus(
+export function countGoalsByAssessment(
   goals: SemesterGoal[],
   semesterId: string | undefined,
-): { open: number; in_progress: number; completed: number } {
+): { unassessed: number; assessed: number; byGrade: Record<GoalAssessmentGrade, number> } {
   const filtered = semesterId ? goals.filter((g) => g.semesterId === semesterId) : goals
-
+  const byGrade: Record<GoalAssessmentGrade, number> = { A: 0, B: 0, C: 0, D: 0, E: 0 }
+  let assessed = 0
+  for (const goal of filtered) {
+    if (goal.assessmentGrade) {
+      assessed += 1
+      byGrade[goal.assessmentGrade] += 1
+    }
+  }
   return {
-    open: filtered.filter((g) => g.status === 'open').length,
-    in_progress: filtered.filter((g) => g.status === 'in_progress').length,
-    completed: filtered.filter((g) => g.status === 'completed').length,
+    unassessed: filtered.length - assessed,
+    assessed,
+    byGrade,
   }
 }
+
+export { goalAssessmentBadgeLabel }

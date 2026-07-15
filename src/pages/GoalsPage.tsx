@@ -38,7 +38,7 @@ export function GoalsPage() {
           semesters={semesters}
           activeSemesterId={activeSemester?.id}
           learnerId={learnerId ?? ''}
-          readOnly
+          canEdit={false}
         />
       )}
     </>

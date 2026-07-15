@@ -7,6 +7,14 @@
         { "fieldPath": "coachId", "order": "ASCENDING" },
         { "fieldPath": "learnerId", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "observerLearnerRelations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "observerId", "order": "ASCENDING" },
+        { "fieldPath": "learnerId", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

@@ -1,4 +1,8 @@
-import type { GoalStatus, JournalStatus, SemesterStatus } from '@/types/domain'
+import type {
+  GoalAssessmentGrade,
+  JournalStatus,
+  SemesterStatus,
+} from '@/types/domain'
 
 export const semesterStatusLabels: Record<SemesterStatus, string> = {
   planned: 'Geplant',
@@ -6,12 +10,19 @@ export const semesterStatusLabels: Record<SemesterStatus, string> = {
   completed: 'Abgeschlossen',
 }
 
-export const goalStatusLabels: Record<GoalStatus, string> = {
-  open: 'Offen',
-  in_progress: 'In Bearbeitung',
-  completed: 'Erreicht',
-  not_completed: 'Nicht erreicht',
-  carried_over: 'Übertragen',
+export const goalAssessmentGrades: GoalAssessmentGrade[] = ['A', 'B', 'C', 'D', 'E']
+
+export const goalAssessmentLabels: Record<GoalAssessmentGrade, string> = {
+  A: 'Übertrifft die Anforderungen deutlich',
+  B: 'Übertrifft die Anforderungen',
+  C: 'Entspricht den Anforderungen',
+  D: 'Entspricht den Anforderungen mit Einschränkungen',
+  E: 'Entspricht den Anforderungen nicht',
+}
+
+export function goalAssessmentBadgeLabel(grade?: GoalAssessmentGrade | null): string {
+  if (!grade) return 'Ohne Beurteilung'
+  return `${grade}) ${goalAssessmentLabels[grade]}`
 }
 
 export const journalStatusLabels: Record<JournalStatus, string> = {

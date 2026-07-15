@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Navigate, Outlet, useParams } from 'react-router-dom'
-import { getCoachLearnerRelation } from '@/features/auth/api'
+import { hasViewerLearnerAccess } from '@/features/auth/api'
 import { useAuth } from '@/features/auth/useAuth'
 
-/** Ensures the signed-in coach is linked to :learnerId before rendering coach learner routes. */
-export function RequireCoachLearner() {
+/** Ensures the signed-in coach or observer is linked to :learnerId. */
+export function RequireLearnerAccess() {
   const { learnerId } = useParams<{ learnerId: string }>()
   const { profile } = useAuth()
   const [allowed, setAllowed] = useState<boolean | null>(null)
@@ -16,9 +16,13 @@ export function RequireCoachLearner() {
         if (!cancelled) setAllowed(false)
         return
       }
+      if (profile.role !== 'coach' && profile.role !== 'observer') {
+        if (!cancelled) setAllowed(false)
+        return
+      }
       try {
-        const relation = await getCoachLearnerRelation(profile.id, learnerId)
-        if (!cancelled) setAllowed(Boolean(relation))
+        const ok = await hasViewerLearnerAccess(profile.id, profile.role, learnerId)
+        if (!cancelled) setAllowed(ok)
       } catch {
         if (!cancelled) setAllowed(false)
       }
@@ -27,7 +31,7 @@ export function RequireCoachLearner() {
     return () => {
       cancelled = true
     }
-  }, [profile?.id, learnerId])
+  }, [profile?.id, profile?.role, learnerId])
 
   if (allowed === null) {
     return <p className="p-6 text-sm text-ink-muted">Laden…</p>

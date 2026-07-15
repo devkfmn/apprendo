@@ -2,10 +2,9 @@ import { Link } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { formatDate, formatDateTime } from '@/lib/utils'
 import { weekLabel } from '@/lib/week'
 import type { JournalEntry, Semester } from '@/types/domain'
-import { format } from 'date-fns'
-import { de } from 'date-fns/locale'
 
 type JournalListProps = {
   entries: JournalEntry[]
@@ -16,7 +15,7 @@ type JournalListProps = {
 }
 
 function dateRange(entry: JournalEntry) {
-  return `${format(new Date(entry.weekStart), 'd. MMM', { locale: de })} – ${format(new Date(entry.weekEnd), 'd. MMM yyyy', { locale: de })}`
+  return `${formatDate(entry.weekStart)} – ${formatDate(entry.weekEnd)}`
 }
 
 export function JournalList({ entries, semesters, topicLabels, loading, entryPath }: JournalListProps) {
@@ -31,12 +30,22 @@ export function JournalList({ entries, semesters, topicLabels, loading, entryPat
           <Card className="transition hover:border-brand">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <CardTitle>{weekLabel(entry.calendarWeek, entry.year)}</CardTitle>
-              <Badge>{entry.status === 'draft' ? 'Entwurf' : 'Eingereicht'}</Badge>
+              <Badge variant={entry.status === 'draft' ? 'warning' : 'default'}>
+                {entry.status === 'draft' ? 'Entwurf' : 'Eingereicht'}
+              </Badge>
             </div>
             <p className="mt-2 text-sm text-ink-muted">{dateRange(entry)}</p>
             <p className="mt-1 text-sm text-ink-muted">{semesterLabels.get(entry.semesterId) ?? 'Unbekanntes Semester'}</p>
-            {entry.status === 'submitted' && entry.submittedAt ? <p className="mt-1 text-xs text-ink-muted">Eingereicht am {format(new Date(entry.submittedAt), 'd. MMM yyyy, HH:mm', { locale: de })}</p> : null}
-            {entry.roadmapTopicIds.length > 0 ? <p className="mt-2 text-xs text-ink-muted">Themen: {entry.roadmapTopicIds.map((id) => topicLabels.get(id) ?? id).join(', ')}</p> : null}
+            {entry.status === 'submitted' && entry.submittedAt ? (
+              <p className="mt-1 text-xs text-ink-muted">
+                Eingereicht am {formatDateTime(entry.submittedAt)}
+              </p>
+            ) : null}
+            {entry.roadmapTopicIds.length > 0 ? (
+              <p className="mt-2 text-xs text-ink-muted">
+                Themen: {entry.roadmapTopicIds.map((id) => topicLabels.get(id) ?? id).join(', ')}
+              </p>
+            ) : null}
           </Card>
         </Link>
       ))}

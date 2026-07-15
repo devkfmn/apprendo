@@ -30,8 +30,12 @@ service cloud.firestore {
       return signedIn() && myRole() == 'learner';
     }
 
-    function relationId(coachId, learnerId) {
-      return coachId + '_' + learnerId;
+    function isObserver() {
+      return signedIn() && myRole() == 'observer';
+    }
+
+    function relationId(a, b) {
+      return a + '_' + b;
     }
 
     function hasCoachLearnerLink(coachId, learnerId) {
@@ -40,12 +44,25 @@ service cloud.firestore {
       );
     }
 
+    function hasObserverLearnerLink(observerId, learnerId) {
+      return exists(
+        /databases/$(database)/documents/observerLearnerRelations/$(relationId(observerId, learnerId))
+      );
+    }
+
     function isAssignedCoach(learnerId) {
       return isCoach() && hasCoachLearnerLink(uid(), learnerId);
     }
 
+    function isAssignedObserver(learnerId) {
+      return isObserver() && hasObserverLearnerLink(uid(), learnerId);
+    }
+
+    // Learner owner, assigned coach, or assigned observer (read-only on writes elsewhere)
     function canAccessLearner(learnerId) {
-      return (isLearner() && uid() == learnerId) || isAssignedCoach(learnerId);
+      return (isLearner() && uid() == learnerId)
+        || isAssignedCoach(learnerId)
+        || isAssignedObserver(learnerId);
     }
 
     function unchangedKeys(keys) {
@@ -58,7 +75,38 @@ service cloud.firestore {
         && request.resource.data[field].size() <= max;
     }
 
-    // —— Invites (code is secret; Admin SDK creates them) ——
+    function inviteDoc() {
+      return get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode));
+    }
+
+    function validCommentCreate(learnerId, targetKind, targetId) {
+      return canAccessLearner(learnerId)
+        && request.resource.data.id is string
+        && request.resource.data.learnerId == learnerId
+        && request.resource.data.targetKind == targetKind
+        && request.resource.data.targetId == targetId
+        && request.resource.data.authorId == uid()
+        && request.resource.data.authorRole == myRole()
+        && request.resource.data.authorDisplayName is string
+        && request.resource.data.authorDisplayName.size() > 0
+        && request.resource.data.authorDisplayName.size() <= 120
+        && stringLen('body', 1, 4000)
+        && request.resource.data.createdAt is string
+        && request.resource.data.updatedAt is string;
+    }
+
+    function validCommentUpdate() {
+      return resource.data.authorId == uid()
+        && request.resource.data.authorId == resource.data.authorId
+        && unchangedKeys([
+          'id', 'learnerId', 'targetKind', 'targetId',
+          'authorId', 'authorRole', 'authorDisplayName', 'createdAt'
+        ])
+        && stringLen('body', 1, 4000)
+        && request.resource.data.updatedAt is string;
+    }
+
+    // —— Invites (code is secret; Admin SDK / CLI creates them) ——
     match /invites/{code} {
       allow get: if true;
       allow list: if false;
@@ -75,6 +123,7 @@ service cloud.firestore {
       allow get: if signedIn() && (
         uid() == userId
         || isAssignedCoach(userId)
+        || isAssignedObserver(userId)
         || (isLearner() && resource.data.role == 'coach' && hasCoachLearnerLink(userId, uid()))
       );
       allow list: if false;
@@ -86,18 +135,15 @@ service cloud.firestore {
         && request.resource.data.displayName is string
         && request.resource.data.displayName.size() > 0
         && request.resource.data.displayName.size() <= 120
-        && request.resource.data.role in ['coach', 'learner']
+        && request.resource.data.role in ['coach', 'learner', 'observer']
         && request.resource.data.inviteCode is string
         && exists(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode))
-        && get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.used == false
-        && get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.email.lower()
-          == request.resource.data.email.lower()
-        && get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.role
-          == request.resource.data.role
+        && inviteDoc().data.used == false
+        && inviteDoc().data.email.lower() == request.resource.data.email.lower()
+        && inviteDoc().data.role == request.resource.data.role
         && (
           request.resource.data.role != 'learner'
-          || request.resource.data.coachId
-            == get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.coachId
+          || request.resource.data.coachId == inviteDoc().data.coachId
         );
 
       allow update: if signedIn()
@@ -105,9 +151,25 @@ service cloud.firestore {
         && unchangedKeys(['id', 'role', 'email', 'coachId', 'inviteCode', 'createdAt']);
 
       allow delete: if false;
+
+      match /contentViews/{viewId} {
+        allow read: if signedIn() && uid() == userId;
+        allow create, update: if signedIn()
+          && uid() == userId
+          && request.resource.data.id == viewId
+          && request.resource.data.viewerId == userId
+          && request.resource.data.learnerId is string
+          && request.resource.data.targetKind in ['journal', 'report']
+          && request.resource.data.targetId is string
+          && request.resource.data.viewedAt is string
+          && viewId == request.resource.data.learnerId + '_'
+            + request.resource.data.targetKind + '_'
+            + request.resource.data.targetId;
+        allow delete: if signedIn() && uid() == userId;
+      }
     }
 
-    // —— Coach ↔ Learner links ——
+    // —— Coach ↔ Lernender links ——
     match /coachLearnerRelations/{relationDocId} {
       allow read: if signedIn() && (
         resource.data.coachId == uid() || resource.data.learnerId == uid()
@@ -120,6 +182,28 @@ service cloud.firestore {
         && relationDocId == relationId(request.resource.data.coachId, request.resource.data.learnerId)
         && myUser().data.role == 'learner'
         && myUser().data.coachId == request.resource.data.coachId;
+
+      allow update, delete: if false;
+    }
+
+    // —— Beobachter ↔ Lernender links (read-only viewers) ——
+    match /observerLearnerRelations/{relationDocId} {
+      allow read: if signedIn() && (
+        resource.data.observerId == uid() || resource.data.learnerId == uid()
+      );
+
+      allow create: if signedIn()
+        && request.resource.data.observerId == uid()
+        && request.resource.data.learnerId is string
+        && request.resource.data.id == relationDocId
+        && relationDocId == relationId(request.resource.data.observerId, request.resource.data.learnerId)
+        && myUser().data.role == 'observer'
+        && myUser().data.inviteCode is string
+        && exists(/databases/$(database)/documents/invites/$(myUser().data.inviteCode))
+        && get(/databases/$(database)/documents/invites/$(myUser().data.inviteCode)).data.used == false
+        && get(/databases/$(database)/documents/invites/$(myUser().data.inviteCode)).data.role == 'observer'
+        && request.resource.data.learnerId
+          in get(/databases/$(database)/documents/invites/$(myUser().data.inviteCode)).data.learnerIds;
 
       allow update, delete: if false;
     }
@@ -146,14 +230,21 @@ service cloud.firestore {
         allow read: if canAccessLearner(learnerId);
         allow create, update: if isAssignedCoach(learnerId)
           && stringLen('title', 1, 200)
-          && request.resource.data.status in [
-            'open', 'in_progress', 'completed', 'not_completed', 'carried_over'
-          ];
+          && (
+            !('assessmentGrade' in request.resource.data)
+            || request.resource.data.assessmentGrade == null
+            || request.resource.data.assessmentGrade in ['A', 'B', 'C', 'D', 'E']
+          );
         allow delete: if false;
       }
 
       match /journalEntries/{entryId} {
-        allow read: if canAccessLearner(learnerId);
+        // Drafts: learner only. Submitted: learner + assigned coach/observer.
+        allow read: if (isLearner() && uid() == learnerId)
+          || (
+            (isAssignedCoach(learnerId) || isAssignedObserver(learnerId))
+            && resource.data.status == 'submitted'
+          );
 
         allow create: if isLearner()
           && uid() == learnerId
@@ -164,29 +255,57 @@ service cloud.firestore {
 
         allow update: if isLearner()
           && uid() == learnerId
-          && resource.data.status == 'draft'
+          && request.resource.data.learnerId == learnerId
+          && unchangedKeys(['learnerId', 'createdAt'])
+          && request.resource.data.status in ['draft', 'submitted']
+          // Once submitted, stay submitted (no revert to draft).
+          && (resource.data.status != 'submitted' || request.resource.data.status == 'submitted')
+          && request.resource.data.answers.workedOn is string
+          && request.resource.data.answers.learned is string
           && (
-            (
-              request.resource.data.status == 'draft'
-              && unchangedKeys(['learnerId', 'createdAt', 'submittedAt'])
-            )
-            || (
-              request.resource.data.status == 'submitted'
-              && unchangedKeys([
-                'learnerId', 'createdAt', 'semesterId', 'calendarWeek', 'year',
-                'weekStart', 'weekEnd', 'answers', 'roadmapTopicIds'
-              ])
-              && request.resource.data.submittedAt is string
-            )
+            resource.data.status == 'submitted'
+              ? unchangedKeys(['submittedAt'])
+              : (
+                request.resource.data.status == 'draft'
+                  || request.resource.data.submittedAt is string
+              )
           );
+
+        // Anyone with learner access may stamp last-comment metadata after commenting.
+        allow update: if canAccessLearner(learnerId)
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['lastCommentAt', 'lastCommentAuthorId', 'lastCommentAuthorName'])
+          && request.resource.data.lastCommentAt is string
+          && request.resource.data.lastCommentAuthorId == uid()
+          && request.resource.data.lastCommentAuthorName is string
+          && request.resource.data.lastCommentAuthorName.size() > 0
+          && request.resource.data.lastCommentAuthorName.size() <= 120;
 
         allow delete: if isLearner()
           && uid() == learnerId
           && resource.data.status == 'draft';
+
+        match /comments/{commentId} {
+          allow read: if (isLearner() && uid() == learnerId)
+            || (
+              (isAssignedCoach(learnerId) || isAssignedObserver(learnerId))
+              && get(/databases/$(database)/documents/learners/$(learnerId)/journalEntries/$(entryId)).data.status == 'submitted'
+            );
+          allow create: if get(/databases/$(database)/documents/learners/$(learnerId)/journalEntries/$(entryId)).data.status == 'submitted'
+            && validCommentCreate(learnerId, 'journal', entryId)
+            && request.resource.data.id == commentId;
+          allow update: if canAccessLearner(learnerId) && validCommentUpdate();
+          allow delete: if canAccessLearner(learnerId) && resource.data.authorId == uid();
+        }
       }
 
       match /learningReports/{reportId} {
-        allow read: if canAccessLearner(learnerId);
+        // Drafts: learner only. Submitted: learner + assigned coach/observer.
+        allow read: if (isLearner() && uid() == learnerId)
+          || (
+            (isAssignedCoach(learnerId) || isAssignedObserver(learnerId))
+            && resource.data.status == 'submitted'
+          );
 
         allow create: if isLearner()
           && uid() == learnerId
@@ -198,24 +317,47 @@ service cloud.firestore {
 
         allow update: if isLearner()
           && uid() == learnerId
-          && resource.data.status == 'draft'
+          && request.resource.data.learnerId == learnerId
+          && unchangedKeys(['learnerId', 'createdAt'])
+          && request.resource.data.status in ['draft', 'submitted']
+          && (resource.data.status != 'submitted' || request.resource.data.status == 'submitted')
+          && stringLen('title', 1, 200)
+          && request.resource.data.bodyMarkdown is string
+          && request.resource.data.bodyMarkdown.size() <= 500000
           && (
-            (
-              request.resource.data.status == 'draft'
-              && unchangedKeys(['learnerId', 'createdAt', 'submittedAt'])
-              && request.resource.data.bodyMarkdown is string
-              && request.resource.data.bodyMarkdown.size() <= 500000
-            )
-            || (
-              request.resource.data.status == 'submitted'
-              && unchangedKeys(['learnerId', 'createdAt', 'title', 'bodyMarkdown', 'semesterId', 'imagePaths', 'blocks'])
-              && request.resource.data.submittedAt is string
-            )
+            resource.data.status == 'submitted'
+              ? unchangedKeys(['submittedAt'])
+              : (
+                request.resource.data.status == 'draft'
+                  || request.resource.data.submittedAt is string
+              )
           );
+
+        allow update: if canAccessLearner(learnerId)
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['lastCommentAt', 'lastCommentAuthorId', 'lastCommentAuthorName'])
+          && request.resource.data.lastCommentAt is string
+          && request.resource.data.lastCommentAuthorId == uid()
+          && request.resource.data.lastCommentAuthorName is string
+          && request.resource.data.lastCommentAuthorName.size() > 0
+          && request.resource.data.lastCommentAuthorName.size() <= 120;
 
         allow delete: if isLearner()
           && uid() == learnerId
           && resource.data.status == 'draft';
+
+        match /comments/{commentId} {
+          allow read: if (isLearner() && uid() == learnerId)
+            || (
+              (isAssignedCoach(learnerId) || isAssignedObserver(learnerId))
+              && get(/databases/$(database)/documents/learners/$(learnerId)/learningReports/$(reportId)).data.status == 'submitted'
+            );
+          allow create: if get(/databases/$(database)/documents/learners/$(learnerId)/learningReports/$(reportId)).data.status == 'submitted'
+            && validCommentCreate(learnerId, 'report', reportId)
+            && request.resource.data.id == commentId;
+          allow update: if canAccessLearner(learnerId) && validCommentUpdate();
+          allow delete: if canAccessLearner(learnerId) && resource.data.authorId == uid();
+        }
       }
 
       match /companyRoadmapItems/{itemId} {
@@ -229,26 +371,16 @@ service cloud.firestore {
       match /roadmapProgress/{progressId} {
         allow read: if canAccessLearner(learnerId);
 
+        // Learner or assigned coach may set treated; observers read-only.
         allow create, update: if (
-          isLearner()
-          && uid() == learnerId
+          (
+            (isLearner() && uid() == learnerId)
+            || isAssignedCoach(learnerId)
+          )
           && request.resource.data.learnerId == learnerId
           && request.resource.data.itemId is string
           && request.resource.data.itemType in ['school', 'company']
-          && (
-            !exists(/databases/$(database)/documents/learners/$(learnerId)/roadmapProgress/$(progressId))
-            || (
-              unchangedKeys([
-                'itemId', 'itemType', 'learnerId',
-                'coachCompleted', 'coachCompletedAt', 'coachCompletedBy',
-                'coachConfirmed', 'coachConfirmedAt', 'confirmedBy'
-              ])
-            )
-          )
-        ) || (
-          isAssignedCoach(learnerId)
-          && request.resource.data.learnerId == learnerId
-          && request.resource.data.itemType in ['school', 'company']
+          && request.resource.data.treated is bool
         );
 
         allow delete: if false;

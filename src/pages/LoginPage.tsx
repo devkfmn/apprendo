@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuth } from '@/features/auth/useAuth'
+import { roleHome } from '@/lib/utils'
 
 export function LoginPage() {
   const { user, profile, loading, login } = useAuth()
@@ -19,7 +20,7 @@ export function LoginPage() {
   if (loading) return <AppLoadingScreen />
 
   if (user && profile) {
-    return <Navigate to={profile.role === 'coach' ? '/coach' : '/'} replace />
+    return <Navigate to={roleHome(profile.role)} replace />
   }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -35,12 +36,16 @@ export function LoginPage() {
       const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname
       const safeFrom =
         from && from !== '/forbidden' && from !== '/login' && from !== '/signup' ? from : null
-      const roleHome = nextProfile.role === 'coach' ? '/coach' : '/'
-      // Coaches must not land on learner-only "from" paths.
+      const home = roleHome(nextProfile.role)
       const destination =
-        safeFrom && (nextProfile.role === 'coach' ? safeFrom.startsWith('/coach') : !safeFrom.startsWith('/coach'))
+        safeFrom &&
+        ((nextProfile.role === 'coach' && safeFrom.startsWith('/coach')) ||
+          (nextProfile.role === 'observer' && safeFrom.startsWith('/beobachter')) ||
+          (nextProfile.role === 'learner' &&
+            !safeFrom.startsWith('/coach') &&
+            !safeFrom.startsWith('/beobachter')))
           ? safeFrom
-          : roleHome
+          : home
       navigate(destination, { replace: true })
     } catch {
       setError('E-Mail-Adresse oder Passwort ist nicht korrekt.')

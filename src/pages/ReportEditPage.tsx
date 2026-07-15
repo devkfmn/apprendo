@@ -7,6 +7,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { useAuth } from '@/features/auth/useAuth'
+import { CommentThread } from '@/features/comments/CommentThread'
+import { useMarkContentViewed } from '@/features/comments/useMarkContentViewed'
 import { ReportEditor } from '@/features/reports/ReportEditor'
 import {
   getLearningReport,
@@ -38,7 +40,15 @@ export function ReportEditPage() {
   const savingRef = useRef(false)
   const reportIdRef = useRef(reportId)
 
-  const readOnly = report?.status === 'submitted'
+  const isSubmitted = report?.status === 'submitted'
+
+  useMarkContentViewed({
+    viewerId: profile?.id,
+    learnerId,
+    targetKind: 'report',
+    targetId: report?.id,
+    enabled: Boolean(report?.id && isSubmitted),
+  })
 
   useEffect(() => {
     reportIdRef.current = reportId
@@ -66,7 +76,7 @@ export function ReportEditPage() {
   }, [reportId, learnerId])
 
   const save = async (autosave = false) => {
-    if (!learnerId || readOnly || savingRef.current) return
+    if (!learnerId || savingRef.current) return
     savingRef.current = true
     try {
       const saved = await saveLearningReportDraft(
@@ -89,7 +99,11 @@ export function ReportEditPage() {
           })}`,
         )
       } else {
-        setMessage('Entwurf gespeichert.')
+        setMessage(
+          isSubmitted || saved.status === 'submitted'
+            ? 'Änderungen gespeichert.'
+            : 'Entwurf gespeichert.',
+        )
         setAutosaveLabel(null)
       }
       if (!reportId && saved.id) {
@@ -106,14 +120,14 @@ export function ReportEditPage() {
   }
 
   useEffect(() => {
-    if (readOnly || !dirty) return
+    if (!dirty) return
     const timer = window.setTimeout(() => void save(true), 4000)
     return () => window.clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [title, bodyMarkdown, dirty, readOnly])
+  }, [title, bodyMarkdown, dirty])
 
   const handleUploadImage = async (file: File): Promise<string | null> => {
-    if (!learnerId || readOnly) return null
+    if (!learnerId) return null
     setError(null)
     setUploading(true)
     try {
@@ -139,7 +153,7 @@ export function ReportEditPage() {
   }
 
   const submit = async () => {
-    if (!learnerId || readOnly) return
+    if (!learnerId || isSubmitted) return
     setError(null)
     try {
       const saved = await save(false)
@@ -164,15 +178,17 @@ export function ReportEditPage() {
   return (
     <>
       <PageHeader
-        title={readOnly ? 'Eingereichter Lernbericht' : 'Lernbericht'}
+        title="Lernbericht"
         description={
-          readOnly
-            ? 'Eingereichte Berichte können nicht mehr geändert werden.'
+          isSubmitted
+            ? 'Eingereicht – du kannst den Bericht weiterhin anpassen.'
             : 'Schreibe einen freien Bericht in Markdown.'
         }
         actions={
           report ? (
-            <Badge>{report.status === 'submitted' ? 'Eingereicht' : 'Entwurf'}</Badge>
+            <Badge variant={report.status === 'submitted' ? 'default' : 'warning'}>
+              {report.status === 'submitted' ? 'Eingereicht' : 'Entwurf'}
+            </Badge>
           ) : null
         }
       />
@@ -192,7 +208,6 @@ export function ReportEditPage() {
           <Input
             id="report-title"
             value={title}
-            disabled={readOnly}
             placeholder="Titel des Lernberichts"
             onChange={(event) => {
               setTitle(event.target.value)
@@ -203,7 +218,6 @@ export function ReportEditPage() {
 
         <ReportEditor
           value={bodyMarkdown}
-          readOnly={readOnly}
           uploading={uploading}
           onChange={(next) => {
             setBodyMarkdown(next)
@@ -212,17 +226,26 @@ export function ReportEditPage() {
           onUploadImage={handleUploadImage}
         />
 
-        {!readOnly ? (
-          <div className="mt-6 flex flex-wrap gap-3">
-            <Button type="button" variant="outline" onClick={() => void save(false)}>
-              Entwurf speichern
-            </Button>
+        <div className="mt-6 flex flex-wrap gap-3">
+          <Button type="button" variant="outline" onClick={() => void save(false)}>
+            {isSubmitted ? 'Änderungen speichern' : 'Entwurf speichern'}
+          </Button>
+          {!isSubmitted ? (
             <Button type="button" onClick={() => void submit()}>
               Einreichen
             </Button>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
       </Card>
+      {profile && report?.id && learnerId ? (
+        <CommentThread
+          learnerId={learnerId}
+          targetKind="report"
+          targetId={report.id}
+          parentSubmitted={report.status === 'submitted'}
+          profile={profile}
+        />
+      ) : null}
     </>
   )
 }

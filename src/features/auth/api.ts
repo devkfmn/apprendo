@@ -13,13 +13,20 @@ import {
   where,
 } from 'firebase/firestore'
 import { auth, db } from '@/lib/firebase'
-import type { CoachLearnerRelation, UserProfile, UserRole } from '@/types/domain'
+import type {
+  CoachLearnerRelation,
+  ObserverLearnerRelation,
+  UserProfile,
+  UserRole,
+} from '@/types/domain'
 
 export interface Invite {
   code: string
   email: string
   role: UserRole
   coachId?: string | null
+  /** For observer invites: learners who may be viewed read-only. */
+  learnerIds?: string[] | null
   displayName?: string | null
   used: boolean
   createdAt: string
@@ -67,6 +74,26 @@ export async function listLearnersForCoach(coachId: string): Promise<UserProfile
   return learners.filter((learner): learner is UserProfile => learner !== null)
 }
 
+export async function listLearnersForObserver(observerId: string): Promise<UserProfile[]> {
+  const relations = await getDocs(
+    query(collection(db, 'observerLearnerRelations'), where('observerId', '==', observerId)),
+  )
+  const learners = await Promise.all(
+    relations.docs.map((item) => getUserProfile(item.data().learnerId)),
+  )
+  return learners.filter((learner): learner is UserProfile => learner !== null)
+}
+
+/** Learners visible to the signed-in coach or observer. */
+export async function listLearnersForViewer(
+  userId: string,
+  role: UserRole,
+): Promise<UserProfile[]> {
+  if (role === 'coach') return listLearnersForCoach(userId)
+  if (role === 'observer') return listLearnersForObserver(userId)
+  return []
+}
+
 export async function getCoachLearnerRelation(
   coachId: string,
   learnerId: string,
@@ -80,6 +107,21 @@ export async function getCoachLearnerRelation(
   )
   const relation = matches.docs[0]
   return relation ? ({ id: relation.id, ...relation.data() } as CoachLearnerRelation) : null
+}
+
+export async function getObserverLearnerRelation(
+  observerId: string,
+  learnerId: string,
+): Promise<ObserverLearnerRelation | null> {
+  const matches = await getDocs(
+    query(
+      collection(db, 'observerLearnerRelations'),
+      where('observerId', '==', observerId),
+      where('learnerId', '==', learnerId),
+    ),
+  )
+  const relation = matches.docs[0]
+  return relation ? ({ id: relation.id, ...relation.data() } as ObserverLearnerRelation) : null
 }
 
 export async function getCoachLearnerRelationsForLearner(
@@ -102,4 +144,32 @@ export async function linkCoachLearner(
   const relation: CoachLearnerRelation = { id, coachId, learnerId, createdAt: now() }
   await setDoc(doc(db, 'coachLearnerRelations', id), relation)
   return relation
+}
+
+export async function linkObserverLearner(
+  observerId: string,
+  learnerId: string,
+): Promise<ObserverLearnerRelation> {
+  const existing = await getObserverLearnerRelation(observerId, learnerId)
+  if (existing) return existing
+
+  const id = `${observerId}_${learnerId}`
+  const relation: ObserverLearnerRelation = { id, observerId, learnerId, createdAt: now() }
+  await setDoc(doc(db, 'observerLearnerRelations', id), relation)
+  return relation
+}
+
+/** True if the viewer (coach or observer) is linked to this learner. */
+export async function hasViewerLearnerAccess(
+  viewerId: string,
+  role: UserRole,
+  learnerId: string,
+): Promise<boolean> {
+  if (role === 'coach') {
+    return Boolean(await getCoachLearnerRelation(viewerId, learnerId))
+  }
+  if (role === 'observer') {
+    return Boolean(await getObserverLearnerRelation(viewerId, learnerId))
+  }
+  return false
 }

@@ -4,6 +4,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { Select } from '@/components/ui/select'
 import { JournalList } from '@/features/journal/JournalList'
 import { useAuth } from '@/features/auth/useAuth'
+import { useViewerArea } from '@/features/auth/useViewerArea'
 import { useJournal } from '@/features/journal/useJournal'
 import { useRoadmap } from '@/features/roadmap/useRoadmap'
 import { useSemesters } from '@/features/semesters/useSemesters'
@@ -11,9 +12,14 @@ import { useSemesters } from '@/features/semesters/useSemesters'
 export function CoachJournalListPage() {
   const { learnerId = '' } = useParams<{ learnerId: string }>()
   const { profile } = useAuth()
-  const { entries, loading } = useJournal(learnerId)
+  const viewer = useViewerArea()
+  const { entries, loading } = useJournal(learnerId, { submittedOnly: true })
   const { semesters } = useSemesters(learnerId)
-  const roadmap = useRoadmap({ learnerId, role: 'coach', actorId: profile?.id ?? '' })
+  const roadmap = useRoadmap({
+    learnerId,
+    role: profile?.role === 'observer' ? 'observer' : 'coach',
+    actorId: profile?.id ?? '',
+  })
   const [semesterId, setSemesterId] = useState('')
   const [calendarWeek, setCalendarWeek] = useState('')
   const [topicId, setTopicId] = useState('')
@@ -23,13 +29,13 @@ export function CoachJournalListPage() {
 
   return (
     <>
-      <PageHeader title="Wochenrückblicke" description="Eingereichte und gespeicherte Rückblicke des Lernenden" />
+      <PageHeader title="Wochenrückblicke" description="Eingereichte Wochenrückblicke des Lernenden" />
       <div className="mb-6 grid gap-3 sm:grid-cols-3">
         <Select value={semesterId} onChange={(event) => setSemesterId(event.target.value)}><option value="">Alle Semester</option>{semesters.map((semester) => <option key={semester.id} value={semester.id}>{semester.label}</option>)}</Select>
         <Select value={calendarWeek} onChange={(event) => setCalendarWeek(event.target.value)}><option value="">Alle Kalenderwochen</option>{[...new Set(entries.map((entry) => entry.calendarWeek))].sort((a, b) => b - a).map((week) => <option key={week} value={week}>KW {week}</option>)}</Select>
         <Select value={topicId} onChange={(event) => setTopicId(event.target.value)}><option value="">Alle Roadmap-Themen</option>{topics.map(({ item, itemType }) => <option key={`${itemType}_${item.id}`} value={item.id}>{item.title}</option>)}</Select>
       </div>
-      <JournalList entries={filtered} semesters={semesters} topicLabels={labels} loading={loading || roadmap.loading} entryPath={(entry) => `/coach/learners/${learnerId}/journal/${entry.id}`} />
+      <JournalList entries={filtered} semesters={semesters} topicLabels={labels} loading={loading || roadmap.loading} entryPath={(entry) => `${viewer?.learnerBase}/journal/${entry.id}`} />
     </>
   )
 }

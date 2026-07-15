@@ -4,8 +4,10 @@ import {
   doc,
   getDoc,
   getDocs,
+  query,
   setDoc,
   updateDoc,
+  where,
 } from 'firebase/firestore'
 import {
   deleteObject,
@@ -51,8 +53,19 @@ function mapReport(id: string, data: Record<string, unknown>): LearningReport {
   return report
 }
 
-export async function listLearningReports(learnerId: string): Promise<LearningReport[]> {
-  const result = await getDocs(reports(learnerId))
+export type ListReportsOptions = {
+  /** Coach/observer: only submitted reports (required by security rules). */
+  submittedOnly?: boolean
+}
+
+export async function listLearningReports(
+  learnerId: string,
+  options: ListReportsOptions = {},
+): Promise<LearningReport[]> {
+  const source = options.submittedOnly
+    ? query(reports(learnerId), where('status', '==', 'submitted'))
+    : reports(learnerId)
+  const result = await getDocs(source)
   return result.docs
     .map((item) => mapReport(item.id, item.data() as Record<string, unknown>))
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
@@ -62,10 +75,15 @@ export async function getLearningReport(
   learnerId: string,
   reportId: string,
 ): Promise<LearningReport | null> {
-  const result = await getDoc(doc(db, paths.report(learnerId, reportId)))
-  return result.exists()
-    ? mapReport(result.id, result.data() as Record<string, unknown>)
-    : null
+  try {
+    const result = await getDoc(doc(db, paths.report(learnerId, reportId)))
+    return result.exists()
+      ? mapReport(result.id, result.data() as Record<string, unknown>)
+      : null
+  } catch {
+    // Permission denied for drafts when viewer is coach/observer
+    return null
+  }
 }
 
 export type SaveReportInput = {
@@ -84,21 +102,19 @@ export async function saveLearningReportDraft(
     ? doc(db, paths.report(learnerId, reportId))
     : doc(reports(learnerId))
   const existing = reportId ? await getLearningReport(learnerId, reportId) : null
-  if (existing?.status === 'submitted') {
-    throw new Error('Eingereichte Lernberichte können nicht geändert werden.')
-  }
   const timestamp = now()
+  const alreadySubmitted = existing?.status === 'submitted'
   const report: LearningReport = {
     id: reference.id,
     learnerId,
     title: values.title.trim() || 'Ohne Titel',
-    status: 'draft',
+    status: alreadySubmitted ? 'submitted' : 'draft',
     bodyMarkdown: values.bodyMarkdown,
     imagePaths: values.imagePaths ?? existing?.imagePaths ?? [],
     semesterId: values.semesterId ?? null,
     createdAt: existing?.createdAt ?? timestamp,
     updatedAt: timestamp,
-    submittedAt: null,
+    submittedAt: alreadySubmitted ? (existing.submittedAt ?? null) : null,
   }
   await setDoc(reference, report, { merge: true })
   return report

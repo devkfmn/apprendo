@@ -1,12 +1,33 @@
-import { collection, deleteDoc, doc, getDoc, getDocs, setDoc, updateDoc } from 'firebase/firestore'
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  setDoc,
+  updateDoc,
+  where,
+} from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import type { JournalAnswers, JournalEntry } from '@/types/domain'
 
 const now = () => new Date().toISOString()
 const entries = (learnerId: string) => collection(db, 'learners', learnerId, 'journalEntries')
 
-export async function listJournalEntries(learnerId: string): Promise<JournalEntry[]> {
-  const result = await getDocs(entries(learnerId))
+export type ListJournalOptions = {
+  /** Coach/observer: only submitted entries (required by security rules). */
+  submittedOnly?: boolean
+}
+
+export async function listJournalEntries(
+  learnerId: string,
+  options: ListJournalOptions = {},
+): Promise<JournalEntry[]> {
+  const source = options.submittedOnly
+    ? query(entries(learnerId), where('status', '==', 'submitted'))
+    : entries(learnerId)
+  const result = await getDocs(source)
   return result.docs
     .map((item) => ({ id: item.id, ...item.data() }) as JournalEntry)
     .sort((a, b) => b.weekStart.localeCompare(a.weekStart))
@@ -16,11 +37,16 @@ export async function getJournalEntry(
   learnerId: string,
   entryId: string,
 ): Promise<JournalEntry | null> {
-  const result = await getDoc(doc(entries(learnerId), entryId))
-  return result.exists() ? ({ id: result.id, ...result.data() } as JournalEntry) : null
+  try {
+    const result = await getDoc(doc(entries(learnerId), entryId))
+    return result.exists() ? ({ id: result.id, ...result.data() } as JournalEntry) : null
+  } catch {
+    // Permission denied for drafts when viewer is coach/observer
+    return null
+  }
 }
 
-/** Learner-only write operation; the coach role must not receive write access in rules. */
+/** Learner write: create/update drafts and edit content after submit (status stays submitted). */
 export async function saveJournalDraft(
   learnerId: string,
   values: Omit<JournalEntry, 'id' | 'learnerId' | 'createdAt' | 'updatedAt' | 'status' | 'submittedAt'>,
@@ -28,22 +54,22 @@ export async function saveJournalDraft(
 ): Promise<JournalEntry> {
   const reference = entryId ? doc(entries(learnerId), entryId) : doc(entries(learnerId))
   const existing = entryId ? await getJournalEntry(learnerId, entryId) : null
-  if (existing?.status === 'submitted') throw new Error('Eingereichte Wochenrückblicke können nicht geändert werden.')
   const timestamp = now()
+  const alreadySubmitted = existing?.status === 'submitted'
   const entry: JournalEntry = {
     ...values,
     id: reference.id,
     learnerId,
-    status: 'draft',
+    status: alreadySubmitted ? 'submitted' : 'draft',
     createdAt: existing?.createdAt ?? timestamp,
     updatedAt: timestamp,
-    submittedAt: null,
+    submittedAt: alreadySubmitted ? (existing.submittedAt ?? null) : null,
   }
   await setDoc(reference, entry, { merge: true })
   return entry
 }
 
-/** Learner-only write operation; submission timestamps are immutable audit data. */
+/** Lernender-only write operation; submission timestamps are immutable audit data. */
 export async function submitJournalEntry(learnerId: string, entryId: string): Promise<void> {
   const entry = await getJournalEntry(learnerId, entryId)
   if (!entry) throw new Error('Wochenrückblick nicht gefunden.')

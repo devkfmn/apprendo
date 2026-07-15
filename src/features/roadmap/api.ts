@@ -30,8 +30,45 @@ function mapCompanyItem(id: string, data: Omit<CompanyRoadmapItem, 'id'>): Compa
   return { id, ...data }
 }
 
-function mapProgress(id: string, data: Omit<RoadmapProgress, 'id'>): RoadmapProgress {
-  return { id, ...data }
+/** Maps current `treated` fields and legacy coach/learner flags. */
+export function mapProgress(
+  id: string,
+  data: Record<string, unknown>,
+): RoadmapProgress {
+  const legacyTreated = Boolean(
+    data.learnerCompleted || data.coachCompleted || data.coachConfirmed,
+  )
+  const treated =
+    typeof data.treated === 'boolean' ? data.treated : legacyTreated
+
+  const treatedAt =
+    (data.treatedAt as string | null | undefined) ??
+    (data.learnerCompletedAt as string | null | undefined) ??
+    (data.coachCompletedAt as string | null | undefined) ??
+    (data.coachConfirmedAt as string | null | undefined) ??
+    null
+
+  const treatedBy =
+    (data.treatedBy as string | null | undefined) ??
+    (data.learnerCompletedBy as string | null | undefined) ??
+    (data.coachCompletedBy as string | null | undefined) ??
+    (data.confirmedBy as string | null | undefined) ??
+    null
+
+  return {
+    id,
+    itemId: String(data.itemId ?? ''),
+    itemType: data.itemType as RoadmapItemType,
+    learnerId: String(data.learnerId ?? ''),
+    treated,
+    treatedAt,
+    treatedBy,
+    updatedAt: String(data.updatedAt ?? ''),
+  }
+}
+
+export function isRoadmapTreated(progress: RoadmapProgress | null | undefined): boolean {
+  return Boolean(progress?.treated)
 }
 
 function mapSemester(id: string, data: Omit<Semester, 'id'>): Semester {
@@ -66,7 +103,7 @@ export async function fetchCompanyItems(
 
 export async function fetchProgress(learnerId: string): Promise<RoadmapProgress[]> {
   const snap = await getDocs(collection(db, paths.progress(learnerId)))
-  return snap.docs.map((d) => mapProgress(d.id, d.data() as Omit<RoadmapProgress, 'id'>))
+  return snap.docs.map((d) => mapProgress(d.id, d.data() as Record<string, unknown>))
 }
 
 export async function fetchActiveSemester(learnerId: string): Promise<Semester | null> {
@@ -81,12 +118,9 @@ export async function fetchActiveSemester(learnerId: string): Promise<Semester |
   return mapSemester(docSnap.id, docSnap.data() as Omit<Semester, 'id'>)
 }
 
-export type ProgressPatch = Partial<
-  Pick<RoadmapProgress, 'learnerCompleted' | 'coachCompleted' | 'coachConfirmed'>
-> & {
-  learnerCompletedBy?: string | null
-  coachCompletedBy?: string | null
-  confirmedBy?: string | null
+export type ProgressPatch = {
+  treated: boolean
+  treatedBy?: string | null
 }
 
 export async function upsertProgress(
@@ -99,28 +133,11 @@ export async function upsertProgress(
   const ref = doc(db, paths.progressItem(learnerId, id))
   const existing = await getDoc(ref)
   const timestamp = now()
-  const updates: Record<string, unknown> = { updatedAt: timestamp }
-
-  if ('learnerCompleted' in patch) {
-    updates.learnerCompleted = patch.learnerCompleted
-    updates.learnerCompletedAt = patch.learnerCompleted ? timestamp : null
-    if ('learnerCompletedBy' in patch) {
-      updates.learnerCompletedBy = patch.learnerCompletedBy ?? null
-    }
-  }
-  if ('coachCompleted' in patch) {
-    updates.coachCompleted = patch.coachCompleted
-    updates.coachCompletedAt = patch.coachCompleted ? timestamp : null
-    if ('coachCompletedBy' in patch) {
-      updates.coachCompletedBy = patch.coachCompletedBy ?? null
-    }
-  }
-  if ('coachConfirmed' in patch) {
-    updates.coachConfirmed = patch.coachConfirmed
-    updates.coachConfirmedAt = patch.coachConfirmed ? timestamp : null
-    if ('confirmedBy' in patch) {
-      updates.confirmedBy = patch.confirmedBy ?? null
-    }
+  const updates: Record<string, unknown> = {
+    updatedAt: timestamp,
+    treated: patch.treated,
+    treatedAt: patch.treated ? timestamp : null,
+    treatedBy: patch.treated ? (patch.treatedBy ?? null) : null,
   }
 
   if (!existing.exists()) {
@@ -128,9 +145,9 @@ export async function upsertProgress(
       itemId,
       itemType,
       learnerId,
-      learnerCompleted: false,
-      coachCompleted: false,
-      coachConfirmed: false,
+      treated: false,
+      treatedAt: null,
+      treatedBy: null,
       ...updates,
     })
     return

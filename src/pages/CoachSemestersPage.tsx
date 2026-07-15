@@ -33,22 +33,16 @@ import { SemesterForm } from '@/features/semesters/SemesterForm'
 import { semesterStatusLabels } from '@/features/semesters/labels'
 import { useSemesters } from '@/features/semesters/useSemesters'
 import { useAuth } from '@/features/auth/useAuth'
+import { useViewerArea } from '@/features/auth/useViewerArea'
+import { formatDate } from '@/lib/utils'
 import { weeksBetween } from '@/lib/week'
-import { format } from 'date-fns'
-import { de } from 'date-fns/locale'
 import type { Semester } from '@/types/domain'
-
-function formatDate(iso: string): string {
-  try {
-    return format(new Date(iso), 'd. MMM yyyy', { locale: de })
-  } catch {
-    return iso
-  }
-}
 
 export function CoachSemestersPage() {
   const { learnerId } = useParams<{ learnerId: string }>()
   const { profile } = useAuth()
+  const viewer = useViewerArea()
+  const canEdit = viewer?.canEdit ?? false
   const { semesters, loading, error } = useSemesters(learnerId)
 
   const [formOpen, setFormOpen] = useState(false)
@@ -73,7 +67,7 @@ export function CoachSemestersPage() {
     endDate: string
     primaryImsQuarters: [number, number]
   }) => {
-    if (!learnerId || !profile) return
+    if (!learnerId || !profile || !canEdit) return
 
     if (editingSemester) {
       await updateSemester(learnerId, editingSemester.id, values)
@@ -86,18 +80,18 @@ export function CoachSemestersPage() {
   }
 
   const handleActivate = async (semesterId: string) => {
-    if (!learnerId) return
+    if (!learnerId || !canEdit) return
     await activateSemester(learnerId, semesterId)
   }
 
   const openCloseDialog = async (semester: Semester) => {
-    if (!learnerId) return
+    if (!learnerId || !canEdit) return
     setClosingSemester(semester)
     setCloseSummary(null)
 
     const [goals, journals, schoolItems, companyItems, progress] = await Promise.all([
       listGoals(learnerId),
-      listJournalEntries(learnerId),
+      listJournalEntries(learnerId, { submittedOnly: true }),
       fetchSchoolItems(),
       fetchCompanyItems(learnerId, { includeArchived: true }),
       fetchProgress(learnerId),
@@ -127,26 +121,24 @@ export function CoachSemestersPage() {
 
     setCloseSummary({
       goalsTotal: semesterGoals.length,
-      goalsOpen: semesterGoals.filter((goal) => goal.status === 'open').length,
-      goalsInProgress: semesterGoals.filter((goal) => goal.status === 'in_progress').length,
-      goalsCompleted: semesterGoals.filter((goal) => goal.status === 'completed').length,
-      goalsNotCompleted: semesterGoals.filter((goal) => goal.status === 'not_completed')
-        .length,
+      goalsUnassessed: semesterGoals.filter((goal) => !goal.assessmentGrade).length,
+      goalsAssessed: semesterGoals.filter((goal) => Boolean(goal.assessmentGrade)).length,
+      goalsByGrade: {
+        A: semesterGoals.filter((goal) => goal.assessmentGrade === 'A').length,
+        B: semesterGoals.filter((goal) => goal.assessmentGrade === 'B').length,
+        C: semesterGoals.filter((goal) => goal.assessmentGrade === 'C').length,
+        D: semesterGoals.filter((goal) => goal.assessmentGrade === 'D').length,
+        E: semesterGoals.filter((goal) => goal.assessmentGrade === 'E').length,
+      },
       journalsSubmitted: semesterJournals.length,
       missingWeeksEstimate,
-      roadmapTreated: relevantProgress.filter(
-        (item) => item.learnerCompleted || item.coachCompleted || item.coachConfirmed,
-      ).length,
+      roadmapTreated: relevantProgress.filter((item) => item.treated).length,
       roadmapTotal: roadmapIds.size,
-      roadmapUnconfirmed: relevantProgress.filter(
-        (item) =>
-          (item.learnerCompleted || item.coachCompleted) && !item.coachConfirmed,
-      ).length,
     })
   }
 
   const handleClose = async (summaryNote: string, carryOverToSemesterId?: string) => {
-    if (!learnerId || !closingSemester) return
+    if (!learnerId || !closingSemester || !canEdit) return
     await closeSemester(learnerId, closingSemester.id, summaryNote)
     if (carryOverToSemesterId) {
       await carryOverOpenGoals(learnerId, closingSemester.id, carryOverToSemesterId)
@@ -159,15 +151,21 @@ export function CoachSemestersPage() {
     <>
       <PageHeader
         title="Semester"
-        description="Semester anlegen, aktivieren und abschliessen"
+        description={
+          canEdit
+            ? 'Semester anlegen, aktivieren und abschliessen'
+            : 'Semesterübersicht (nur Lesen)'
+        }
       />
 
-      <div className="mb-6">
-        <Button onClick={openCreate}>
-          <Plus className="size-4" />
-          Neues Semester
-        </Button>
-      </div>
+      {canEdit ? (
+        <div className="mb-6">
+          <Button onClick={openCreate}>
+            <Plus className="size-4" />
+            Neues Semester
+          </Button>
+        </div>
+      ) : null}
 
       {loading ? (
         <p className="text-sm text-ink-muted">Laden…</p>
@@ -198,27 +196,31 @@ export function CoachSemestersPage() {
                 </p>
               ) : null}
               <div className="mt-3 flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" onClick={() => openEdit(semester)}>
-                  Bearbeiten
-                </Button>
-                {semester.status === 'planned' ? (
-                  <Button size="sm" onClick={() => void handleActivate(semester.id)}>
-                    Aktivieren
-                  </Button>
-                ) : null}
-                {semester.status === 'active' ? (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => void openCloseDialog(semester)}
-                  >
-                    Abschliessen
-                  </Button>
-                ) : null}
-                {semester.status === 'completed' ? (
-                  <Button size="sm" onClick={() => void reopenSemester(learnerId!, semester.id)}>
-                    Wieder öffnen
-                  </Button>
+                {canEdit ? (
+                  <>
+                    <Button variant="outline" size="sm" onClick={() => openEdit(semester)}>
+                      Bearbeiten
+                    </Button>
+                    {semester.status === 'planned' ? (
+                      <Button size="sm" onClick={() => void handleActivate(semester.id)}>
+                        Aktivieren
+                      </Button>
+                    ) : null}
+                    {semester.status === 'active' ? (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => void openCloseDialog(semester)}
+                      >
+                        Abschliessen
+                      </Button>
+                    ) : null}
+                    {semester.status === 'completed' ? (
+                      <Button size="sm" onClick={() => void reopenSemester(learnerId!, semester.id)}>
+                        Wieder öffnen
+                      </Button>
+                    ) : null}
+                  </>
                 ) : null}
               </div>
             </Card>
@@ -226,38 +228,42 @@ export function CoachSemestersPage() {
         </div>
       )}
 
-      <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {editingSemester ? 'Semester bearbeiten' : 'Neues Semester'}
-            </DialogTitle>
-          </DialogHeader>
-          <SemesterForm
-            semester={editingSemester ?? undefined}
-            onSubmit={handleSubmit}
-            onCancel={() => setFormOpen(false)}
-          />
-        </DialogContent>
-      </Dialog>
+      {canEdit ? (
+        <Dialog open={formOpen} onOpenChange={setFormOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                {editingSemester ? 'Semester bearbeiten' : 'Neues Semester'}
+              </DialogTitle>
+            </DialogHeader>
+            <SemesterForm
+              semester={editingSemester ?? undefined}
+              onSubmit={handleSubmit}
+              onCancel={() => setFormOpen(false)}
+            />
+          </DialogContent>
+        </Dialog>
+      ) : null}
 
-      <SemesterCloseDialog
-        semester={closingSemester}
-        summary={closeSummary}
-        targetSemesters={semesters.filter(
-          (semester) =>
-            semester.id !== closingSemester?.id &&
-            (semester.status === 'planned' || semester.status === 'active'),
-        )}
-        open={closingSemester !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setClosingSemester(null)
-            setCloseSummary(null)
-          }
-        }}
-        onConfirm={handleClose}
-      />
+      {canEdit ? (
+        <SemesterCloseDialog
+          semester={closingSemester}
+          summary={closeSummary}
+          targetSemesters={semesters.filter(
+            (semester) =>
+              semester.id !== closingSemester?.id &&
+              (semester.status === 'planned' || semester.status === 'active'),
+          )}
+          open={closingSemester !== null}
+          onOpenChange={(open) => {
+            if (!open) {
+              setClosingSemester(null)
+              setCloseSummary(null)
+            }
+          }}
+          onConfirm={handleClose}
+        />
+      ) : null}
     </>
   )
 }

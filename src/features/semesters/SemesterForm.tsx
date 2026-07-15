@@ -1,11 +1,12 @@
 import { Button } from '@/components/ui/button'
+import { DateInput } from '@/components/ui/date-input'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { IMS_QUARTERS } from '@/features/semesters/labels'
 import type { Semester } from '@/types/domain'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useForm } from 'react-hook-form'
+import { Controller, useForm } from 'react-hook-form'
 import { z } from 'zod'
 
 const semesterSchema = z
@@ -39,6 +40,7 @@ type SemesterFormProps = {
 export function SemesterForm({ semester, onSubmit, onCancel }: SemesterFormProps) {
   const {
     register,
+    control,
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<SemesterFormValues>({
@@ -79,14 +81,40 @@ export function SemesterForm({ semester, onSubmit, onCancel }: SemesterFormProps
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="startDate">Startdatum</Label>
-          <Input id="startDate" type="date" {...register('startDate')} />
+          <Controller
+            name="startDate"
+            control={control}
+            render={({ field }) => (
+              <DateInput
+                id="startDate"
+                value={field.value}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+                name={field.name}
+                required
+              />
+            )}
+          />
           {errors.startDate ? (
             <p className="text-sm text-danger">{errors.startDate.message}</p>
           ) : null}
         </div>
         <div className="space-y-2">
           <Label htmlFor="endDate">Enddatum</Label>
-          <Input id="endDate" type="date" {...register('endDate')} />
+          <Controller
+            name="endDate"
+            control={control}
+            render={({ field }) => (
+              <DateInput
+                id="endDate"
+                value={field.value}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+                name={field.name}
+                required
+              />
+            )}
+          />
           {errors.endDate ? (
             <p className="text-sm text-danger">{errors.endDate.message}</p>
           ) : null}

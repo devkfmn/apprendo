@@ -1,9 +1,12 @@
 /**
  * Creates invite docs using Firebase CLI credentials (no service account).
  *
+ * Roles: Coach (`coach`), Lernender (`lernender`/`learner`), Beobachter (`beobachter`/`observer`).
+ *
  * Usage:
  *   npx tsx scripts/invite-user-cli.ts --email coach@example.com --role coach --code coach-1
- *   npx tsx scripts/invite-user-cli.ts --email learner@example.com --role learner --coachId <uid> --code learner-1
+ *   npx tsx scripts/invite-user-cli.ts --email learner@example.com --role lernender --coachId <uid> --code learner-1
+ *   npx tsx scripts/invite-user-cli.ts --email observer@example.com --role beobachter --learnerIds <uid1,uid2> --code obs-1
  */
 import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
@@ -69,21 +72,51 @@ function toFirestoreFields(value: unknown): Record<string, unknown> {
   return { stringValue: String(value) }
 }
 
+type StoredRole = 'coach' | 'learner' | 'observer'
+
+function parseRole(raw: string | undefined): StoredRole | null {
+  if (!raw) return null
+  const normalized = raw.trim().toLowerCase()
+  if (normalized === 'coach') return 'coach'
+  if (normalized === 'lernender' || normalized === 'learner') return 'learner'
+  if (normalized === 'beobachter' || normalized === 'observer') return 'observer'
+  return null
+}
+
+function roleLabel(role: StoredRole): string {
+  if (role === 'coach') return 'Coach'
+  if (role === 'observer') return 'Beobachter'
+  return 'Lernender'
+}
+
+function parseLearnerIds(raw: string | undefined): string[] {
+  if (!raw) return []
+  return raw
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean)
+}
+
 async function main() {
   const email = arg('email')
-  const role = arg('role') as 'coach' | 'learner' | undefined
+  const role = parseRole(arg('role'))
   const coachId = arg('coachId') ?? null
+  const learnerIds = parseLearnerIds(arg('learnerIds'))
   const displayName = arg('name') ?? null
   const code = arg('code') ?? randomBytes(4).toString('hex')
 
-  if (!email || !role || !['coach', 'learner'].includes(role)) {
+  if (!email || !role) {
     console.error(
-      'Required: --email <email> --role <coach|learner> [--coachId <uid>] [--code <code>] [--name <displayName>]',
+      'Required: --email <email> --role <coach|lernender|beobachter> [--coachId <uid>] [--learnerIds <uid,uid>] [--code <code>] [--name <displayName>]',
     )
     process.exit(1)
   }
   if (role === 'learner' && !coachId) {
-    console.error('Learner invites require --coachId <coachUid>')
+    console.error('Einladungen für Lernende benötigen --coachId <coachUid>')
+    process.exit(1)
+  }
+  if (role === 'observer' && learnerIds.length === 0) {
+    console.error('Einladungen für Beobachter benötigen --learnerIds <learnerUid,learnerUid>')
     process.exit(1)
   }
 
@@ -91,7 +124,8 @@ async function main() {
   const payload = {
     email: email.toLowerCase(),
     role,
-    coachId,
+    coachId: role === 'learner' ? coachId : null,
+    learnerIds: role === 'observer' ? learnerIds : null,
     displayName,
     used: false,
     createdAt: new Date().toISOString(),
@@ -110,11 +144,12 @@ async function main() {
     throw new Error(`Failed to write invite: ${res.status} ${await res.text()}`)
   }
 
-  console.log('Invite created:')
+  console.log('Einladung erstellt:')
   console.log(`  code: ${code}`)
   console.log(`  email: ${email}`)
-  console.log(`  role: ${role}`)
-  if (coachId) console.log(`  coachId: ${coachId}`)
+  console.log(`  role: ${roleLabel(role)} (${role})`)
+  if (coachId && role === 'learner') console.log(`  coachId: ${coachId}`)
+  if (learnerIds.length) console.log(`  learnerIds: ${learnerIds.join(', ')}`)
   console.log('Signup URL path: /signup')
 }
 

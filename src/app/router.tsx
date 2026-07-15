@@ -1,8 +1,9 @@
 import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom'
 import { RequireAuth } from '@/components/auth/RequireAuth'
-import { RequireCoachLearner } from '@/components/auth/RequireCoachLearner'
+import { RequireLearnerAccess } from '@/components/auth/RequireLearnerAccess'
 import { AppShell } from '@/components/layout/AppShell'
 import { useAuth } from '@/features/auth/useAuth'
+import { roleHome } from '@/lib/utils'
 import { CoachGoalsPage } from '@/pages/CoachGoalsPage'
 import { CoachJournalDetailPage } from '@/pages/CoachJournalDetailPage'
 import { CoachJournalListPage } from '@/pages/CoachJournalListPage'
@@ -28,7 +29,9 @@ import { SignupPage } from '@/pages/SignupPage'
 
 function RoleIndex() {
   const { profile } = useAuth()
-  if (profile?.role === 'coach') return <Navigate to="/coach" replace />
+  if (profile?.role === 'coach' || profile?.role === 'observer') {
+    return <Navigate to={roleHome(profile.role)} replace />
+  }
   return (
     <RequireAuth roles="learner">
       <AppShell>
@@ -54,6 +57,14 @@ function CoachArea() {
   )
 }
 
+function ObserverArea() {
+  return (
+    <RequireAuth roles="observer">
+      <AppShell />
+    </RequireAuth>
+  )
+}
+
 function ProtectedIndex() {
   return (
     <RequireAuth>
@@ -61,6 +72,18 @@ function ProtectedIndex() {
     </RequireAuth>
   )
 }
+
+const viewerLearnerRoutes = [
+  { index: true, element: <LearnerOverviewPage /> },
+  { path: 'journal', element: <CoachJournalListPage /> },
+  { path: 'journal/:entryId', element: <CoachJournalDetailPage /> },
+  { path: 'reports', element: <CoachReportsListPage /> },
+  { path: 'reports/:reportId', element: <CoachReportDetailPage /> },
+  { path: 'goals', element: <CoachGoalsPage /> },
+  { path: 'roadmap', element: <CoachRoadmapPage /> },
+  { path: 'roadmap/all', element: <CoachRoadmapHistoryPage /> },
+  { path: 'semesters', element: <CoachSemestersPage /> },
+]
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -91,18 +114,19 @@ export const router = createBrowserRouter([
           { path: '/coach', element: <LearnerListPage /> },
           {
             path: '/coach/learners/:learnerId',
-            element: <RequireCoachLearner />,
-            children: [
-              { index: true, element: <LearnerOverviewPage /> },
-              { path: 'journal', element: <CoachJournalListPage /> },
-              { path: 'journal/:entryId', element: <CoachJournalDetailPage /> },
-              { path: 'reports', element: <CoachReportsListPage /> },
-              { path: 'reports/:reportId', element: <CoachReportDetailPage /> },
-              { path: 'goals', element: <CoachGoalsPage /> },
-              { path: 'roadmap', element: <CoachRoadmapPage /> },
-              { path: 'roadmap/all', element: <CoachRoadmapHistoryPage /> },
-              { path: 'semesters', element: <CoachSemestersPage /> },
-            ],
+            element: <RequireLearnerAccess />,
+            children: viewerLearnerRoutes,
+          },
+        ],
+      },
+      {
+        element: <ObserverArea />,
+        children: [
+          { path: '/beobachter', element: <LearnerListPage /> },
+          {
+            path: '/beobachter/learners/:learnerId',
+            element: <RequireLearnerAccess />,
+            children: viewerLearnerRoutes,
           },
         ],
       },

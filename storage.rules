@@ -24,8 +24,22 @@ service firebase.storage {
         );
     }
 
+    function isAssignedObserver(learnerId) {
+      return signedIn()
+        && userRole() == 'observer'
+        && firestore.exists(
+          /databases/(default)/documents/observerLearnerRelations/$(request.auth.uid + '_' + learnerId)
+        );
+    }
+
     match /learners/{learnerId}/reports/{reportId}/{fileName} {
-      allow read: if isLearnerOwner(learnerId) || isAssignedCoach(learnerId);
+      allow read: if isLearnerOwner(learnerId)
+        || (
+          (isAssignedCoach(learnerId) || isAssignedObserver(learnerId))
+          && firestore.get(
+            /databases/(default)/documents/learners/$(learnerId)/learningReports/$(reportId)
+          ).data.status == 'submitted'
+        );
       allow write: if isLearnerOwner(learnerId)
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');

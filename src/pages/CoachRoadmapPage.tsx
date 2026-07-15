@@ -1,17 +1,20 @@
 import { Link, useParams } from 'react-router-dom'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useAuth } from '@/features/auth/useAuth'
+import { useViewerArea } from '@/features/auth/useViewerArea'
 import { RoadmapQuarterView } from '@/features/roadmap/RoadmapQuarterView'
 import { useRoadmap } from '@/features/roadmap/useRoadmap'
-import { useAuth } from '@/features/auth/useAuth'
 
 export function CoachRoadmapPage() {
   const { learnerId } = useParams()
   const { profile } = useAuth()
+  const viewer = useViewerArea()
+  const canEdit = viewer?.canEdit ?? false
 
   const roadmap = useRoadmap({
     learnerId: learnerId!,
-    role: 'coach',
+    role: profile?.role === 'observer' ? 'observer' : 'coach',
     actorId: profile!.id,
   })
 
@@ -32,7 +35,7 @@ export function CoachRoadmapPage() {
 
       <div className="mb-6 flex justify-end">
         <Link
-          to={`/coach/learners/${learnerId}/roadmap/all`}
+          to={`${viewer?.learnerBase}/roadmap/all`}
           className="inline-flex h-8 items-center rounded-md border border-line bg-panel px-3 text-xs font-semibold text-ink hover:bg-canvas"
         >
           Historie anzeigen
@@ -61,7 +64,7 @@ export function CoachRoadmapPage() {
               key={quarter.imsQuarter}
               quarter={quarter}
               roadmap={roadmap}
-              canManageCompany
+              canManageCompany={canEdit}
             />
           ))}
         </div>

@@ -1,13 +1,9 @@
-export type UserRole = 'coach' | 'learner'
+/** Stored role keys in Auth/Firestore. Display via `roleLabel`. */
+export type UserRole = 'coach' | 'learner' | 'observer'
 
 export type SemesterStatus = 'planned' | 'active' | 'completed'
 
-export type GoalStatus =
-  | 'open'
-  | 'in_progress'
-  | 'completed'
-  | 'not_completed'
-  | 'carried_over'
+export type GoalAssessmentGrade = 'A' | 'B' | 'C' | 'D' | 'E'
 
 export type JournalStatus = 'draft' | 'submitted'
 
@@ -40,6 +36,10 @@ export interface LearningReport {
   createdAt: string
   updatedAt: string
   submittedAt?: string | null
+  /** Latest comment activity (denormalized for dashboard hints). */
+  lastCommentAt?: string | null
+  lastCommentAuthorId?: string | null
+  lastCommentAuthorName?: string | null
 }
 
 export type CompanyItemStatus = 'active' | 'archived'
@@ -65,6 +65,14 @@ export interface CoachLearnerRelation {
   createdAt: string
 }
 
+/** Read-only access: one observer ↔ many learners. */
+export interface ObserverLearnerRelation {
+  id: string
+  observerId: string
+  learnerId: string
+  createdAt: string
+}
+
 export interface Semester {
   id: string
   label: string
@@ -85,14 +93,18 @@ export interface SemesterGoal {
   semesterId: string
   title: string
   description: string
-  status: GoalStatus
   dueDate?: string | null
-  completionNote?: string | null
+  /** Coach-only end-of-semester assessment (A–E). Null = not yet assessed. */
+  assessmentGrade?: GoalAssessmentGrade | null
+  assessmentNote?: string | null
+  assessedAt?: string | null
+  assessedBy?: string | null
+  /** True when this goal was transferred to a later semester. */
+  carriedOver?: boolean
   sortOrder: number
   createdBy: string
   createdAt: string
   updatedAt: string
-  completedAt?: string | null
 }
 
 export interface JournalAnswers {
@@ -118,6 +130,36 @@ export interface JournalEntry {
   createdAt: string
   updatedAt: string
   submittedAt?: string | null
+  /** Latest comment activity (denormalized for dashboard hints). */
+  lastCommentAt?: string | null
+  lastCommentAuthorId?: string | null
+  lastCommentAuthorName?: string | null
+}
+
+/** Comment on a Wochenrückblick or Lernbericht. */
+export type CommentTargetKind = 'journal' | 'report'
+
+export interface ContentComment {
+  id: string
+  learnerId: string
+  targetKind: CommentTargetKind
+  targetId: string
+  authorId: string
+  authorDisplayName: string
+  authorRole: UserRole
+  body: string
+  createdAt: string
+  updatedAt: string
+}
+
+/** Per-user timestamp of last time a journal/report was opened (clears comment hints). */
+export interface ContentViewReceipt {
+  id: string
+  viewerId: string
+  learnerId: string
+  targetKind: CommentTargetKind
+  targetId: string
+  viewedAt: string
 }
 
 /** IMS Lehrquartal 1–16 (BiVo Applikation IMS) */
@@ -156,19 +198,14 @@ export interface RoadmapProgress {
   itemId: string
   itemType: RoadmapItemType
   learnerId: string
-  learnerCompleted: boolean
-  learnerCompletedAt?: string | null
-  learnerCompletedBy?: string | null
-  coachCompleted: boolean
-  coachCompletedAt?: string | null
-  coachCompletedBy?: string | null
-  coachConfirmed: boolean
-  coachConfirmedAt?: string | null
-  confirmedBy?: string | null
+  /** Topic covered — set by learner (roadmap or Wochenrückblick) or coach. */
+  treated: boolean
+  treatedAt?: string | null
+  treatedBy?: string | null
   updatedAt: string
 }
 
-export type RoadmapDisplayState = 'open' | 'treated' | 'confirmed'
+export type RoadmapDisplayState = 'open' | 'treated'
 
 export interface RoadmapItemView {
   itemType: RoadmapItemType

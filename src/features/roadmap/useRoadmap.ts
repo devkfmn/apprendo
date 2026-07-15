@@ -148,16 +148,21 @@ export function useRoadmap({
               itemId,
               itemType,
               learnerId,
-              learnerCompleted: patch.learnerCompleted ?? false,
-              coachCompleted: patch.coachCompleted ?? false,
-              coachConfirmed: patch.coachConfirmed ?? false,
-              confirmedBy: patch.confirmedBy ?? null,
+              treated: patch.treated,
+              treatedAt: patch.treated ? timestamp : null,
+              treatedBy: patch.treated ? (patch.treatedBy ?? null) : null,
               updatedAt: timestamp,
             },
           ]
         }
         const next = [...prev]
-        next[idx] = { ...next[idx]!, ...patch, updatedAt: timestamp }
+        next[idx] = {
+          ...next[idx]!,
+          treated: patch.treated,
+          treatedAt: patch.treated ? timestamp : null,
+          treatedBy: patch.treated ? (patch.treatedBy ?? null) : null,
+          updatedAt: timestamp,
+        }
         return next
       })
     },

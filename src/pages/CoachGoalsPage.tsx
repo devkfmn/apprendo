@@ -15,11 +15,14 @@ import { createGoal, updateGoal } from '@/features/goals/api'
 import { useGoals } from '@/features/goals/useGoals'
 import { useSemesters } from '@/features/semesters/useSemesters'
 import { useAuth } from '@/features/auth/useAuth'
-import type { GoalStatus, SemesterGoal } from '@/types/domain'
+import { useViewerArea } from '@/features/auth/useViewerArea'
+import type { SemesterGoal } from '@/types/domain'
 
 export function CoachGoalsPage() {
   const { learnerId } = useParams<{ learnerId: string }>()
   const { profile } = useAuth()
+  const viewer = useViewerArea()
+  const canEdit = viewer?.canEdit ?? false
   const { semesters, activeSemester, loading: semestersLoading } = useSemesters(learnerId)
   const { goals, loading: goalsLoading } = useGoals(learnerId)
 
@@ -40,15 +43,13 @@ export function CoachGoalsPage() {
     semesterId: string
     title: string
     description: string
-    status: GoalStatus
     dueDate?: string | null
-    completionNote?: string | null
     sortOrder: number
   }) => {
-    if (!learnerId || !profile) return
+    if (!learnerId || !profile || !canEdit) return
 
     if (editingGoal) {
-      await updateGoal(learnerId, editingGoal.id, values)
+      await updateGoal(learnerId, editingGoal.id, values, profile.id)
     } else {
       await createGoal(learnerId, values, profile.id)
     }
@@ -63,53 +64,61 @@ export function CoachGoalsPage() {
         title="Ziele"
         description={
           activeSemester
-            ? `Ziele für ${activeSemester.label} verwalten`
+            ? canEdit
+              ? `Ziele für ${activeSemester.label} verwalten und am Semesternende beurteilen`
+              : `Ziele für ${activeSemester.label}`
             : 'Semesterziele für diese/n Lernende/n'
         }
       />
 
-      <div className="mb-6">
-        <Button onClick={openCreate} disabled={semesters.length === 0}>
-          <Plus className="size-4" />
-          Neues Ziel
-        </Button>
-        {semesters.length === 0 ? (
-          <p className="mt-2 text-sm text-ink-muted">
-            Zuerst ein Semester unter{' '}
-            <Link
-              to={`/coach/learners/${learnerId}/semesters`}
-              className="text-brand underline"
-            >
-              Semester
-            </Link>{' '}
-            anlegen.
-          </p>
-        ) : null}
-      </div>
+      {canEdit ? (
+        <div className="mb-6">
+          <Button onClick={openCreate} disabled={semesters.length === 0}>
+            <Plus className="size-4" />
+            Neues Ziel
+          </Button>
+          {semesters.length === 0 ? (
+            <p className="mt-2 text-sm text-ink-muted">
+              Zuerst ein Semester unter{' '}
+              <Link
+                to={`${viewer?.learnerBase}/semesters`}
+                className="text-brand underline"
+              >
+                Semester
+              </Link>{' '}
+              anlegen.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       <GoalList
         goals={goals}
         semesters={semesters}
         activeSemesterId={activeSemester?.id}
         learnerId={learnerId ?? ''}
+        actorId={profile?.id}
         loading={semestersLoading || goalsLoading}
-        onEditGoal={openEdit}
+        canEdit={canEdit}
+        onEditGoal={canEdit ? openEdit : undefined}
       />
 
-      <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{editingGoal ? 'Ziel bearbeiten' : 'Neues Ziel'}</DialogTitle>
-          </DialogHeader>
-          <GoalForm
-            goal={editingGoal ?? undefined}
-            semesters={semesters}
-            defaultSemesterId={activeSemester?.id}
-            onSubmit={handleSubmit}
-            onCancel={() => setFormOpen(false)}
-          />
-        </DialogContent>
-      </Dialog>
+      {canEdit ? (
+        <Dialog open={formOpen} onOpenChange={setFormOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{editingGoal ? 'Ziel bearbeiten' : 'Neues Ziel'}</DialogTitle>
+            </DialogHeader>
+            <GoalForm
+              goal={editingGoal ?? undefined}
+              semesters={semesters}
+              defaultSemesterId={activeSemester?.id}
+              onSubmit={handleSubmit}
+              onCancel={() => setFormOpen(false)}
+            />
+          </DialogContent>
+        </Dialog>
+      ) : null}
     </>
   )
 }

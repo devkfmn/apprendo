@@ -24,15 +24,13 @@ type CloseFormValues = z.infer<typeof closeSchema>
 
 export type SemesterCloseSummary = {
   goalsTotal: number
-  goalsOpen: number
-  goalsInProgress: number
-  goalsCompleted: number
-  goalsNotCompleted: number
+  goalsUnassessed: number
+  goalsAssessed: number
+  goalsByGrade: Record<'A' | 'B' | 'C' | 'D' | 'E', number>
   journalsSubmitted: number
   missingWeeksEstimate: number
   roadmapTreated: number
   roadmapTotal: number
-  roadmapUnconfirmed: number
 }
 
 type SemesterCloseDialogProps = {
@@ -87,9 +85,11 @@ export function SemesterCloseDialog({
               <p className="font-medium">Kurzüberblick</p>
               <ul className="list-inside list-disc space-y-1 text-ink-muted">
                 <li>
-                  Ziele: {summary.goalsTotal} gesamt · {summary.goalsOpen} offen ·{' '}
-                  {summary.goalsInProgress} in Bearbeitung · {summary.goalsCompleted} erfüllt
-                  · {summary.goalsNotCompleted} nicht erfüllt
+                  Ziele: {summary.goalsTotal} gesamt · {summary.goalsUnassessed} ohne Beurteilung
+                  · {summary.goalsAssessed} beurteilt
+                  {summary.goalsAssessed > 0
+                    ? ` (A ${summary.goalsByGrade.A}, B ${summary.goalsByGrade.B}, C ${summary.goalsByGrade.C}, D ${summary.goalsByGrade.D}, E ${summary.goalsByGrade.E})`
+                    : ''}
                 </li>
                 <li>
                   Wochenrückblicke eingereicht: {summary.journalsSubmitted}
@@ -98,8 +98,7 @@ export function SemesterCloseDialog({
                     : ''}
                 </li>
                 <li>
-                  Roadmap: {summary.roadmapTreated}/{summary.roadmapTotal} behandelt ·{' '}
-                  {summary.roadmapUnconfirmed} noch nicht bestätigt
+                  Roadmap: {summary.roadmapTreated}/{summary.roadmapTotal} behandelt
                 </li>
               </ul>
             </div>
@@ -118,13 +117,13 @@ export function SemesterCloseDialog({
           </div>
           {targetSemesters.length > 0 ? (
             <div className="space-y-2">
-              <Label htmlFor="carry-over">Offene Ziele übernehmen</Label>
+              <Label htmlFor="carry-over">Nicht beurteilte Ziele übernehmen</Label>
               <Select
                 id="carry-over"
                 value={carryOverToSemesterId}
                 onChange={(event) => setCarryOverToSemesterId(event.target.value)}
               >
-                <option value="">Offene Ziele nicht übernehmen</option>
+                <option value="">Nicht beurteilte Ziele nicht übernehmen</option>
                 {targetSemesters.map((target) => (
                   <option key={target.id} value={target.id}>
                     Nach «{target.label}» übernehmen
@@ -132,8 +131,8 @@ export function SemesterCloseDialog({
                 ))}
               </Select>
               <p className="text-xs text-ink-muted">
-                Offene Ziele bleiben im abgeschlossenen Semester als «übertragen» sichtbar und
-                werden im Ziel-Semester neu als offen angelegt.
+                Ziele ohne Beurteilung bleiben im abgeschlossenen Semester als «übertragen»
+                sichtbar und werden im Folgesemester neu angelegt.
               </p>
             </div>
           ) : (

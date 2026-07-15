@@ -9,21 +9,39 @@ import {
   updateDoc,
 } from 'firebase/firestore'
 import { db, paths } from '@/lib/firebase'
-import type { GoalStatus, SemesterGoal } from '@/types/domain'
+import type { GoalAssessmentGrade, SemesterGoal } from '@/types/domain'
 
 const now = () => new Date().toISOString()
 
-function mapGoal(id: string, data: Omit<SemesterGoal, 'id'>): SemesterGoal {
-  return { id, ...data }
+function mapGoal(id: string, data: Record<string, unknown>): SemesterGoal {
+  const legacyNote =
+    (data.assessmentNote as string | null | undefined) ??
+    (data.completionNote as string | null | undefined) ??
+    null
+
+  return {
+    id,
+    semesterId: String(data.semesterId ?? ''),
+    title: String(data.title ?? ''),
+    description: String(data.description ?? ''),
+    dueDate: (data.dueDate as string | null | undefined) ?? null,
+    assessmentGrade: (data.assessmentGrade as GoalAssessmentGrade | null | undefined) ?? null,
+    assessmentNote: legacyNote,
+    assessedAt: (data.assessedAt as string | null | undefined) ?? null,
+    assessedBy: (data.assessedBy as string | null | undefined) ?? null,
+    carriedOver: Boolean(data.carriedOver),
+    sortOrder: Number(data.sortOrder ?? 0),
+    createdBy: String(data.createdBy ?? ''),
+    createdAt: String(data.createdAt ?? ''),
+    updatedAt: String(data.updatedAt ?? ''),
+  }
 }
 
 export type CreateGoalInput = {
   semesterId: string
   title: string
   description: string
-  status?: GoalStatus
   dueDate?: string | null
-  completionNote?: string | null
   sortOrder: number
 }
 
@@ -34,7 +52,7 @@ export type UpdateGoalInput = Partial<
 export async function listGoals(learnerId: string): Promise<SemesterGoal[]> {
   const q = query(collection(db, paths.goals(learnerId)), orderBy('sortOrder', 'asc'))
   const snap = await getDocs(q)
-  return snap.docs.map((d) => mapGoal(d.id, d.data() as Omit<SemesterGoal, 'id'>))
+  return snap.docs.map((d) => mapGoal(d.id, d.data() as Record<string, unknown>))
 }
 
 export async function getGoal(
@@ -43,7 +61,7 @@ export async function getGoal(
 ): Promise<SemesterGoal | null> {
   const snap = await getDoc(doc(db, paths.goal(learnerId, goalId)))
   if (!snap.exists()) return null
-  return mapGoal(snap.id, snap.data() as Omit<SemesterGoal, 'id'>)
+  return mapGoal(snap.id, snap.data() as Record<string, unknown>)
 }
 
 export async function createGoal(
@@ -55,14 +73,16 @@ export async function createGoal(
     semesterId: input.semesterId,
     title: input.title,
     description: input.description,
-    status: input.status ?? 'open',
     dueDate: input.dueDate ?? null,
-    completionNote: input.completionNote ?? null,
+    assessmentGrade: null,
+    assessmentNote: null,
+    assessedAt: null,
+    assessedBy: null,
+    carriedOver: false,
     sortOrder: input.sortOrder,
     createdBy,
     createdAt: now(),
     updatedAt: now(),
-    completedAt: null,
   })
   return ref.id
 }
@@ -71,22 +91,30 @@ export async function updateGoal(
   learnerId: string,
   goalId: string,
   input: UpdateGoalInput,
+  actorId?: string,
 ): Promise<void> {
   const payload: Record<string, unknown> = {
     ...input,
     updatedAt: now(),
   }
 
-  if (input.status === 'completed' && input.completedAt === undefined) {
-    payload.completedAt = now()
+  if ('assessmentGrade' in input) {
+    if (input.assessmentGrade) {
+      payload.assessedAt = input.assessedAt ?? now()
+      if (actorId) payload.assessedBy = actorId
+    } else {
+      payload.assessmentGrade = null
+      payload.assessedAt = null
+      payload.assessedBy = null
+    }
   }
 
   await updateDoc(doc(db, paths.goal(learnerId, goalId)), payload)
 }
 
 /**
- * Marks open goals on the closed semester as carried_over (history preserved)
- * and creates fresh open copies on the target semester.
+ * Unassessed goals on the closed semester are marked carriedOver
+ * and recreated on the target semester without an assessment.
  */
 export async function carryOverOpenGoals(
   learnerId: string,
@@ -97,17 +125,17 @@ export async function carryOverOpenGoals(
   const openGoals = goals.filter(
     (goal) =>
       goal.semesterId === fromSemesterId &&
-      (goal.status === 'open' || goal.status === 'in_progress'),
+      !goal.assessmentGrade &&
+      !goal.carriedOver,
   )
 
   let nextSort = goals.filter((g) => g.semesterId === toSemesterId).length
 
   for (const goal of openGoals) {
     await updateGoal(learnerId, goal.id, {
-      status: 'carried_over',
-      completedAt: now(),
-      completionNote:
-        goal.completionNote ??
+      carriedOver: true,
+      assessmentNote:
+        goal.assessmentNote ??
         `Übertragen ins Folgesemester am ${now().slice(0, 10)}`,
     })
     await createGoal(
@@ -116,7 +144,6 @@ export async function carryOverOpenGoals(
         semesterId: toSemesterId,
         title: goal.title,
         description: goal.description,
-        status: 'open',
         dueDate: goal.dueDate ?? null,
         sortOrder: nextSort++,
       },

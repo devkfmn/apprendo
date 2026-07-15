@@ -2,9 +2,8 @@ import { Link } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { formatDateTime } from '@/lib/utils'
 import type { LearningReport } from '@/types/domain'
-import { format } from 'date-fns'
-import { de } from 'date-fns/locale'
 
 type ReportListProps = {
   reports: LearningReport[]
@@ -36,11 +35,12 @@ export function ReportList({ reports, loading, reportPath }: ReportListProps) {
               <div>
                 <CardTitle className="text-base">{report.title || 'Ohne Titel'}</CardTitle>
                 <p className="mt-1 text-sm text-ink-muted">
-                  Zuletzt geändert{' '}
-                  {format(new Date(report.updatedAt), 'd. MMM yyyy, HH:mm', { locale: de })}
+                  Zuletzt geändert {formatDateTime(report.updatedAt)}
                 </p>
               </div>
-              <Badge>{report.status === 'submitted' ? 'Eingereicht' : 'Entwurf'}</Badge>
+              <Badge variant={report.status === 'submitted' ? 'default' : 'warning'}>
+                {report.status === 'submitted' ? 'Eingereicht' : 'Entwurf'}
+              </Badge>
             </div>
           </Card>
         </Link>

@@ -1,20 +1,23 @@
 import { Link, useParams } from 'react-router-dom'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useAuth } from '@/features/auth/useAuth'
+import { useViewerArea } from '@/features/auth/useViewerArea'
 import { RoadmapQuarterView } from '@/features/roadmap/RoadmapQuarterView'
 import { useRoadmap } from '@/features/roadmap/useRoadmap'
-import { useAuth } from '@/features/auth/useAuth'
 import { ALL_IMS_QUARTERS } from '@/lib/ims'
 
 export function CoachRoadmapHistoryPage() {
   const { learnerId } = useParams()
   const { profile } = useAuth()
+  const viewer = useViewerArea()
+  const canEdit = viewer?.canEdit ?? false
 
   const roadmap = useRoadmap({
     learnerId: learnerId!,
     imsQuarters: ALL_IMS_QUARTERS,
     includeArchivedCompany: true,
-    role: 'coach',
+    role: profile?.role === 'observer' ? 'observer' : 'coach',
     actorId: profile!.id,
   })
 
@@ -31,7 +34,7 @@ export function CoachRoadmapHistoryPage() {
 
       <div className="mb-6">
         <Link
-          to={`/coach/learners/${learnerId}/roadmap`}
+          to={`${viewer?.learnerBase}/roadmap`}
           className="inline-flex h-8 items-center rounded-md border border-line bg-panel px-3 text-xs font-semibold text-ink hover:bg-canvas"
         >
           Zurück zur aktuellen Roadmap
@@ -53,7 +56,7 @@ export function CoachRoadmapHistoryPage() {
               key={quarter.imsQuarter}
               quarter={quarter}
               roadmap={roadmap}
-              canManageCompany
+              canManageCompany={canEdit}
             />
           ))}
         </div>

@@ -40,8 +40,18 @@ Benutzer einladen (Firebase CLI Login):
 ```bash
 npx tsx scripts/invite-user-cli.ts --email coach@example.com --role coach --code coach-1
 # Nach Coach-Signup die UID notieren, dann Lernende einladen:
-npx tsx scripts/invite-user-cli.ts --email learner@example.com --role learner --coachId <coachUid> --code learner-1
+npx tsx scripts/invite-user-cli.ts --email learner@example.com --role lernender --coachId <coachUid> --code learner-1
+# Beobachter (nur Lesen) für einen oder mehrere Lernende:
+npx tsx scripts/invite-user-cli.ts --email observer@example.com --role beobachter --learnerIds <learnerUid1,learnerUid2> --code obs-1
 ```
+
+Rollen:
+
+| Anzeige | Gespeichert | Rechte |
+|---------|-------------|--------|
+| **Coach** | `coach` | kann mehrere Lernende betreuen und Inhalte verwalten |
+| **Lernender** | `learner` | eigener Bereich, Schreiben erlaubt |
+| **Beobachter** | `observer` | kann mehrere Lernende **nur lesen** |
 
 Signup unter `/signup` mit Einladungscode.
 
@@ -53,12 +63,13 @@ Signup unter `/signup` mit Einladungscode.
 4. Coach erfasst Semesterziele
 5. Lernender sieht die Ziele
 6. Lernender speichert Wochenrückblick als Entwurf
-7. Lernender reicht den Rückblick ein
-8. Coach liest den Rückblick
-9. Lernender markiert Roadmap-Themen als behandelt
-10. Coach markiert und bestätigt Roadmap-Themen
+7. Lernender reicht den Wochenrückblick ein
+8. Coach liest den Wochenrückblick
+9. Lernender markiert Roadmap-Themen als behandelt (auch über den Wochenrückblick)
+10. Coach kann Roadmap-Themen ebenfalls als behandelt markieren
 11. Coach pflegt betriebliche Roadmap-Themen
-12. Coach schliesst Semesterziele ab
+12. Coach beurteilt Semesterziele in fünf Stufen (A–E); Lernende und Beobachter sehen die Beurteilung nur
 13. Coach schliesst ein Semester ab
-14. Offene Ziele können ins Folgesemester übertragen werden
+14. Nicht beurteilte Ziele können ins Folgesemester übertragen werden
 15. Vergangene Semester bleiben einsehbar
+16. Beobachter sieht zugewiesene Lernende und Inhalte, ohne sie zu ändern

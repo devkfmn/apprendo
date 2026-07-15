@@ -25,6 +25,7 @@ export const paths = {
   users: 'users',
   user: (uid: string) => `users/${uid}`,
   relations: 'coachLearnerRelations',
+  observerRelations: 'observerLearnerRelations',
   invites: 'invites',
   schoolRoadmap: 'schoolRoadmapItems',
   learner: (learnerId: string) => `learners/${learnerId}`,
@@ -35,9 +36,19 @@ export const paths = {
   journal: (learnerId: string) => `learners/${learnerId}/journalEntries`,
   journalEntry: (learnerId: string, id: string) =>
     `learners/${learnerId}/journalEntries/${id}`,
+  journalComments: (learnerId: string, entryId: string) =>
+    `learners/${learnerId}/journalEntries/${entryId}/comments`,
+  journalComment: (learnerId: string, entryId: string, commentId: string) =>
+    `learners/${learnerId}/journalEntries/${entryId}/comments/${commentId}`,
   reports: (learnerId: string) => `learners/${learnerId}/learningReports`,
   report: (learnerId: string, id: string) =>
     `learners/${learnerId}/learningReports/${id}`,
+  reportComments: (learnerId: string, reportId: string) =>
+    `learners/${learnerId}/learningReports/${reportId}/comments`,
+  reportComment: (learnerId: string, reportId: string, commentId: string) =>
+    `learners/${learnerId}/learningReports/${reportId}/comments/${commentId}`,
+  contentViews: (userId: string) => `users/${userId}/contentViews`,
+  contentView: (userId: string, viewId: string) => `users/${userId}/contentViews/${viewId}`,
   schoolItem: (id: string) => `schoolRoadmapItems/${id}`,
   companyItems: (learnerId: string) => `learners/${learnerId}/companyRoadmapItems`,
   companyItem: (learnerId: string, id: string) =>
