@@ -1,0 +1,50 @@
+import { Link } from 'react-router-dom'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardTitle } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
+import type { LearningReport } from '@/types/domain'
+import { format } from 'date-fns'
+import { de } from 'date-fns/locale'
+
+type ReportListProps = {
+  reports: LearningReport[]
+  loading?: boolean
+  reportPath: (report: LearningReport) => string
+}
+
+export function ReportList({ reports, loading, reportPath }: ReportListProps) {
+  if (loading) {
+    return (
+      <div className="space-y-3">
+        {Array.from({ length: 3 }).map((_, index) => (
+          <Skeleton key={index} className="h-20 w-full" />
+        ))}
+      </div>
+    )
+  }
+
+  if (reports.length === 0) {
+    return <p className="text-sm text-ink-muted">Noch keine Lernberichte vorhanden.</p>
+  }
+
+  return (
+    <div className="space-y-3">
+      {reports.map((report) => (
+        <Link key={report.id} to={reportPath(report)} className="block">
+          <Card className="transition hover:border-brand">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <CardTitle className="text-base">{report.title || 'Ohne Titel'}</CardTitle>
+                <p className="mt-1 text-sm text-ink-muted">
+                  Zuletzt geändert{' '}
+                  {format(new Date(report.updatedAt), 'd. MMM yyyy, HH:mm', { locale: de })}
+                </p>
+              </div>
+              <Badge>{report.status === 'submitted' ? 'Eingereicht' : 'Entwurf'}</Badge>
+            </div>
+          </Card>
+        </Link>
+      ))}
+    </div>
+  )
+}

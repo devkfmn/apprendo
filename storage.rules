@@ -1,0 +1,35 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userRole() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isLearnerOwner(learnerId) {
+      return signedIn()
+        && request.auth.uid == learnerId
+        && userRole() == 'learner';
+    }
+
+    function isAssignedCoach(learnerId) {
+      return signedIn()
+        && userRole() == 'coach'
+        && firestore.exists(
+          /databases/(default)/documents/coachLearnerRelations/$(request.auth.uid + '_' + learnerId)
+        );
+    }
+
+    match /learners/{learnerId}/reports/{reportId}/{fileName} {
+      allow read: if isLearnerOwner(learnerId) || isAssignedCoach(learnerId);
+      allow write: if isLearnerOwner(learnerId)
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if isLearnerOwner(learnerId);
+    }
+  }
+}

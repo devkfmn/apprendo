@@ -1,0 +1,258 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function uid() {
+      return request.auth.uid;
+    }
+
+    function userDoc(userId) {
+      return get(/databases/$(database)/documents/users/$(userId));
+    }
+
+    function myUser() {
+      return userDoc(uid());
+    }
+
+    function myRole() {
+      return myUser().data.role;
+    }
+
+    function isCoach() {
+      return signedIn() && myRole() == 'coach';
+    }
+
+    function isLearner() {
+      return signedIn() && myRole() == 'learner';
+    }
+
+    function relationId(coachId, learnerId) {
+      return coachId + '_' + learnerId;
+    }
+
+    function hasCoachLearnerLink(coachId, learnerId) {
+      return exists(
+        /databases/$(database)/documents/coachLearnerRelations/$(relationId(coachId, learnerId))
+      );
+    }
+
+    function isAssignedCoach(learnerId) {
+      return isCoach() && hasCoachLearnerLink(uid(), learnerId);
+    }
+
+    function canAccessLearner(learnerId) {
+      return (isLearner() && uid() == learnerId) || isAssignedCoach(learnerId);
+    }
+
+    function unchangedKeys(keys) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(keys);
+    }
+
+    function stringLen(field, min, max) {
+      return request.resource.data[field] is string
+        && request.resource.data[field].size() >= min
+        && request.resource.data[field].size() <= max;
+    }
+
+    // —— Invites (code is secret; Admin SDK creates them) ——
+    match /invites/{code} {
+      allow get: if true;
+      allow list: if false;
+      allow create, delete: if false;
+      allow update: if signedIn()
+        && resource.data.used == false
+        && request.resource.data.used == true
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['used'])
+        && request.auth.token.email.lower() == resource.data.email.lower();
+    }
+
+    // —— Users ——
+    match /users/{userId} {
+      allow get: if signedIn() && (
+        uid() == userId
+        || isAssignedCoach(userId)
+        || (isLearner() && resource.data.role == 'coach' && hasCoachLearnerLink(userId, uid()))
+      );
+      allow list: if false;
+
+      allow create: if signedIn()
+        && uid() == userId
+        && request.resource.data.id == userId
+        && request.resource.data.email is string
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0
+        && request.resource.data.displayName.size() <= 120
+        && request.resource.data.role in ['coach', 'learner']
+        && request.resource.data.inviteCode is string
+        && exists(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode))
+        && get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.used == false
+        && get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.email.lower()
+          == request.resource.data.email.lower()
+        && get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.role
+          == request.resource.data.role
+        && (
+          request.resource.data.role != 'learner'
+          || request.resource.data.coachId
+            == get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.coachId
+        );
+
+      allow update: if signedIn()
+        && uid() == userId
+        && unchangedKeys(['id', 'role', 'email', 'coachId', 'inviteCode', 'createdAt']);
+
+      allow delete: if false;
+    }
+
+    // —— Coach ↔ Learner links ——
+    match /coachLearnerRelations/{relationDocId} {
+      allow read: if signedIn() && (
+        resource.data.coachId == uid() || resource.data.learnerId == uid()
+      );
+
+      allow create: if signedIn()
+        && request.resource.data.learnerId == uid()
+        && request.resource.data.coachId is string
+        && request.resource.data.id == relationDocId
+        && relationDocId == relationId(request.resource.data.coachId, request.resource.data.learnerId)
+        && myUser().data.role == 'learner'
+        && myUser().data.coachId == request.resource.data.coachId;
+
+      allow update, delete: if false;
+    }
+
+    // —— Fixed school roadmap (read-only for clients) ——
+    match /schoolRoadmapItems/{itemId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    // —— Per-learner data ——
+    match /learners/{learnerId} {
+      allow read, write: if false;
+
+      match /semesters/{semesterId} {
+        allow read: if canAccessLearner(learnerId);
+        allow create, update: if isAssignedCoach(learnerId)
+          && stringLen('label', 1, 120)
+          && request.resource.data.status in ['planned', 'active', 'completed'];
+        allow delete: if false;
+      }
+
+      match /semesterGoals/{goalId} {
+        allow read: if canAccessLearner(learnerId);
+        allow create, update: if isAssignedCoach(learnerId)
+          && stringLen('title', 1, 200)
+          && request.resource.data.status in [
+            'open', 'in_progress', 'completed', 'not_completed', 'carried_over'
+          ];
+        allow delete: if false;
+      }
+
+      match /journalEntries/{entryId} {
+        allow read: if canAccessLearner(learnerId);
+
+        allow create: if isLearner()
+          && uid() == learnerId
+          && request.resource.data.learnerId == learnerId
+          && request.resource.data.status == 'draft'
+          && request.resource.data.answers.workedOn is string
+          && request.resource.data.answers.learned is string;
+
+        allow update: if isLearner()
+          && uid() == learnerId
+          && resource.data.status == 'draft'
+          && (
+            (
+              request.resource.data.status == 'draft'
+              && unchangedKeys(['learnerId', 'createdAt', 'submittedAt'])
+            )
+            || (
+              request.resource.data.status == 'submitted'
+              && unchangedKeys([
+                'learnerId', 'createdAt', 'semesterId', 'calendarWeek', 'year',
+                'weekStart', 'weekEnd', 'answers', 'roadmapTopicIds'
+              ])
+              && request.resource.data.submittedAt is string
+            )
+          );
+
+        allow delete: if isLearner()
+          && uid() == learnerId
+          && resource.data.status == 'draft';
+      }
+
+      match /learningReports/{reportId} {
+        allow read: if canAccessLearner(learnerId);
+
+        allow create: if isLearner()
+          && uid() == learnerId
+          && request.resource.data.learnerId == learnerId
+          && request.resource.data.status == 'draft'
+          && stringLen('title', 1, 200)
+          && request.resource.data.bodyMarkdown is string
+          && request.resource.data.bodyMarkdown.size() <= 500000;
+
+        allow update: if isLearner()
+          && uid() == learnerId
+          && resource.data.status == 'draft'
+          && (
+            (
+              request.resource.data.status == 'draft'
+              && unchangedKeys(['learnerId', 'createdAt', 'submittedAt'])
+              && request.resource.data.bodyMarkdown is string
+              && request.resource.data.bodyMarkdown.size() <= 500000
+            )
+            || (
+              request.resource.data.status == 'submitted'
+              && unchangedKeys(['learnerId', 'createdAt', 'title', 'bodyMarkdown', 'semesterId', 'imagePaths', 'blocks'])
+              && request.resource.data.submittedAt is string
+            )
+          );
+
+        allow delete: if isLearner()
+          && uid() == learnerId
+          && resource.data.status == 'draft';
+      }
+
+      match /companyRoadmapItems/{itemId} {
+        allow read: if canAccessLearner(learnerId);
+        allow create, update: if isAssignedCoach(learnerId)
+          && stringLen('title', 1, 200)
+          && request.resource.data.status in ['active', 'archived'];
+        allow delete: if false;
+      }
+
+      match /roadmapProgress/{progressId} {
+        allow read: if canAccessLearner(learnerId);
+
+        allow create, update: if (
+          isLearner()
+          && uid() == learnerId
+          && request.resource.data.learnerId == learnerId
+          && request.resource.data.itemId is string
+          && request.resource.data.itemType in ['school', 'company']
+          && (
+            !exists(/databases/$(database)/documents/learners/$(learnerId)/roadmapProgress/$(progressId))
+            || (
+              unchangedKeys([
+                'itemId', 'itemType', 'learnerId',
+                'coachCompleted', 'coachCompletedAt', 'coachCompletedBy',
+                'coachConfirmed', 'coachConfirmedAt', 'confirmedBy'
+              ])
+            )
+          )
+        ) || (
+          isAssignedCoach(learnerId)
+          && request.resource.data.learnerId == learnerId
+          && request.resource.data.itemType in ['school', 'company']
+        );
+
+        allow delete: if false;
+      }
+    }
+  }
+}
