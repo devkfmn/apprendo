@@ -9,11 +9,13 @@ import { useAuth } from '@/features/auth/useAuth'
 import { useViewerArea } from '@/features/auth/useViewerArea'
 import { useLearnerActivitySignals } from '@/features/comments/useCommentHints'
 import { useGoals } from '@/features/goals/useGoals'
+import { countJournalSemesterStats } from '@/features/journal/stats'
 import { useJournal } from '@/features/journal/useJournal'
 import { useReports } from '@/features/reports/useReports'
 import { isRoadmapTreated } from '@/features/roadmap/api'
 import { useRoadmap } from '@/features/roadmap/useRoadmap'
 import { useSemesters } from '@/features/semesters/useSemesters'
+import { resolveSemesterId } from '@/features/semesters/SemesterFilterSelect'
 import { getIsoWeekInfo } from '@/lib/week'
 import { formatDate } from '@/lib/utils'
 import type { UserProfile, UserRole } from '@/types/domain'
@@ -29,7 +31,7 @@ function LearnerCard({
   viewerRole: UserRole
   areaBase: '/coach' | '/beobachter'
 }) {
-  const { activeSemester } = useSemesters(learner.id)
+  const { activeSemester, semesters } = useSemesters(learner.id)
   const { goals } = useGoals(learner.id)
   const { entries } = useJournal(learner.id, { submittedOnly: true })
   const { reports } = useReports(learner.id, { submittedOnly: true })
@@ -49,6 +51,14 @@ function LearnerCard({
   const assessedGoals = activeGoals.filter((goal) => Boolean(goal.assessmentGrade)).length
   const roadmapItems = roadmap.quarters.flatMap((quarter) => [...quarter.school, ...quarter.company])
   const treated = roadmapItems.filter(({ progress }) => isRoadmapTreated(progress)).length
+  const journalStats = countJournalSemesterStats(entries, activeSemester, {
+    throughDate: new Date(),
+  })
+  const reportsThisSemester = activeSemester
+    ? reports.filter(
+        (report) => resolveSemesterId(report, semesters) === activeSemester.id,
+      ).length
+    : 0
   const latestJournal = entries.find((entry) => entry.status === 'submitted')
   const latestReport = reports[0]
   const hasCurrentJournal = entries.some(
@@ -109,21 +119,25 @@ function LearnerCard({
             </span>
           </p>
           <p>
-            Letzter Wochenrückblick:{' '}
+            Wochenrückblicke:{' '}
             <span className="text-ink">
-              {latestJournal?.submittedAt
-                ? formatDate(latestJournal.submittedAt)
-                : 'Noch keiner'}
+              {activeSemester
+                ? `${journalStats.submitted} geschrieben · ${journalStats.missing} fehlend`
+                : latestJournal?.submittedAt
+                  ? formatDate(latestJournal.submittedAt)
+                  : 'Noch keiner'}
             </span>
           </p>
           <p>
-            Letzter Lernbericht:{' '}
+            Lernberichte:{' '}
             <span className="text-ink">
-              {latestReport?.submittedAt
-                ? formatDate(latestReport.submittedAt)
-                : latestReport
-                  ? formatDate(latestReport.updatedAt)
-                  : 'Noch keiner'}
+              {activeSemester
+                ? `${reportsThisSemester} geschrieben`
+                : latestReport?.submittedAt
+                  ? formatDate(latestReport.submittedAt)
+                  : latestReport
+                    ? formatDate(latestReport.updatedAt)
+                    : 'Noch keiner'}
             </span>
           </p>
         </div>

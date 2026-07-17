@@ -6,7 +6,7 @@ import { useAuth } from '@/features/auth/useAuth'
 import { useViewerArea } from '@/features/auth/useViewerArea'
 import { useReports } from '@/features/reports/useReports'
 import { useRoadmap } from '@/features/roadmap/useRoadmap'
-import { SemesterFilterSelect } from '@/features/semesters/SemesterFilterSelect'
+import { SemesterFilterSelect, countBySemesterId, resolveSemesterId } from '@/features/semesters/SemesterFilterSelect'
 import { useSemesterFilter } from '@/features/semesters/useSemesterFilter'
 import { useSemesters } from '@/features/semesters/useSemesters'
 
@@ -34,12 +34,16 @@ export function CoachReportsListPage() {
       ),
     [roadmap.quarters],
   )
+  const countsBySemesterId = useMemo(
+    () => countBySemesterId(reports, semesters),
+    [reports, semesters],
+  )
   const filtered = useMemo(
     () =>
       semesterId
-        ? reports.filter((report) => report.semesterId === semesterId)
+        ? reports.filter((report) => resolveSemesterId(report, semesters) === semesterId)
         : reports,
-    [reports, semesterId],
+    [reports, semesterId, semesters],
   )
 
   return (
@@ -53,6 +57,9 @@ export function CoachReportsListPage() {
           semesters={semesters}
           value={semesterId}
           onChange={onSemesterChange}
+          countsBySemesterId={countsBySemesterId}
+          totalCount={reports.length}
+          countLabel="geschrieben"
         />
       </div>
       <ReportList

@@ -56,59 +56,61 @@ export function ReportEditor({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="inline-flex rounded-md border border-line bg-canvas p-0.5">
-          <button
-            type="button"
-            className={cn(
-              'rounded px-3 py-1.5 text-xs font-semibold',
-              view === 'markdown' ? 'bg-panel text-brand shadow-sm' : 'text-ink-muted',
-            )}
-            onClick={() => setView('markdown')}
-          >
-            Markdown
-          </button>
-          <button
-            type="button"
-            className={cn(
-              'rounded px-3 py-1.5 text-xs font-semibold',
-              view === 'preview' ? 'bg-panel text-brand shadow-sm' : 'text-ink-muted',
-            )}
-            onClick={() => setView('preview')}
-          >
-            Formatiert
-          </button>
-        </div>
-
-        {!readOnly && view === 'markdown' && onUploadImage ? (
-          <>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(event) => {
-                const file = event.target.files?.[0]
-                if (!file) return
-                void onUploadImage(file).then((url) => {
-                  if (url) insertImageMarkdown(url)
-                })
-                event.target.value = ''
-              }}
-            />
-            <Button
+      {!readOnly ? (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="inline-flex rounded-md border border-line bg-canvas p-0.5">
+            <button
               type="button"
-              variant="outline"
-              size="sm"
-              disabled={uploading}
-              onClick={() => fileRef.current?.click()}
+              className={cn(
+                'rounded px-3 py-1.5 text-xs font-semibold',
+                view === 'markdown' ? 'bg-panel text-brand shadow-sm' : 'text-ink-muted',
+              )}
+              onClick={() => setView('markdown')}
             >
-              <ImagePlus className="size-4" />
-              {uploading ? 'Bild wird geladen…' : 'Bild einfügen'}
-            </Button>
-          </>
-        ) : null}
-      </div>
+              Markdown
+            </button>
+            <button
+              type="button"
+              className={cn(
+                'rounded px-3 py-1.5 text-xs font-semibold',
+                view === 'preview' ? 'bg-panel text-brand shadow-sm' : 'text-ink-muted',
+              )}
+              onClick={() => setView('preview')}
+            >
+              Formatiert
+            </button>
+          </div>
+
+          {view === 'markdown' && onUploadImage ? (
+            <>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0]
+                  if (!file) return
+                  void onUploadImage(file).then((url) => {
+                    if (url) insertImageMarkdown(url)
+                  })
+                  event.target.value = ''
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={uploading}
+                onClick={() => fileRef.current?.click()}
+              >
+                <ImagePlus className="size-4" />
+                {uploading ? 'Bild wird geladen…' : 'Bild einfügen'}
+              </Button>
+            </>
+          ) : null}
+        </div>
+      ) : null}
 
       {view === 'markdown' && !readOnly ? (
         <Textarea

@@ -16,6 +16,8 @@ import {
   uploadBytes,
 } from 'firebase/storage'
 import { db, paths, reportImagePath, storage } from '@/lib/firebase'
+import { findCurrentSemester } from '@/features/semesters/defaultTimeline'
+import { listSemesters } from '@/features/semesters/api'
 import type { LearningReport, ReportBlock } from '@/types/domain'
 
 const now = () => new Date().toISOString()
@@ -133,11 +135,17 @@ export async function submitLearningReport(
   if (!existing) throw new Error('Lernbericht nicht gefunden.')
   if (existing.status === 'submitted') return
   const timestamp = now()
-  await updateDoc(doc(db, paths.report(learnerId, reportId)), {
+  const patch: Record<string, unknown> = {
     status: 'submitted',
     submittedAt: timestamp,
     updatedAt: timestamp,
-  })
+  }
+  if (!existing.semesterId) {
+    const semesters = await listSemesters(learnerId)
+    const current = findCurrentSemester(semesters)
+    if (current) patch.semesterId = current.id
+  }
+  await updateDoc(doc(db, paths.report(learnerId, reportId)), patch)
 }
 
 export async function deleteLearningReportDraft(

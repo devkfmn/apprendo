@@ -1,7 +1,8 @@
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { NavLink, Outlet, useParams } from 'react-router-dom'
 import { BrandLogo } from '@/components/brand/BrandLogo'
 import { Button } from '@/components/ui/button'
+import { getUserProfile } from '@/features/auth/api'
 import { useAuth } from '@/features/auth/useAuth'
 import { roleLabel, viewerAreaBase } from '@/lib/utils'
 
@@ -18,6 +19,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
   const { learnerId } = useParams()
   const areaBase = profile ? viewerAreaBase(profile.role) : null
   const isViewer = Boolean(areaBase)
+  const canEdit = profile?.role === 'coach'
   const links = isViewer
     ? ([['Lernende', areaBase!] as const])
     : learnerLinks
@@ -32,6 +34,22 @@ export function AppShell({ children }: { children?: ReactNode }) {
           ['Semester', `${areaBase}/learners/${learnerId}/semesters`],
         ]
       : []
+
+  const [learnerName, setLearnerName] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!learnerId) {
+      setLearnerName(null)
+      return
+    }
+    let cancelled = false
+    void getUserProfile(learnerId).then((user) => {
+      if (!cancelled) setLearnerName(user?.displayName ?? null)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [learnerId])
 
   return (
     <div className="min-h-screen">
@@ -65,23 +83,28 @@ export function AppShell({ children }: { children?: ReactNode }) {
           ))}
         </nav>
         {learnerLinksForViewer.length > 0 && (
-          <nav
-            className="mb-8 flex flex-wrap gap-1 border-b border-line pb-4"
-            aria-label="Lernendenavigation"
-          >
-            {learnerLinksForViewer.map(([label, href]) => (
-              <NavLink
-                key={href}
-                to={href}
-                end={href.endsWith(learnerId ?? '')}
-                className={({ isActive }) =>
-                  `rounded-md px-3 py-2 text-sm ${isActive ? 'bg-brand-soft text-brand' : 'text-ink-muted hover:bg-brand-soft'}`
-                }
-              >
-                {label}
-              </NavLink>
-            ))}
-          </nav>
+          <div className="mb-8 border-b border-line pb-4">
+            <p className="mb-3 text-sm">
+              {canEdit ? 'Du bearbeitest: ' : 'Du siehst: '}
+              <strong className="font-semibold text-brand">
+                {learnerName ?? 'Lernende/r'}
+              </strong>
+            </p>
+            <nav className="flex flex-wrap gap-1" aria-label="Lernendenavigation">
+              {learnerLinksForViewer.map(([label, href]) => (
+                <NavLink
+                  key={href}
+                  to={href}
+                  end={href.endsWith(learnerId ?? '')}
+                  className={({ isActive }) =>
+                    `rounded-md px-3 py-2 text-sm ${isActive ? 'bg-brand-soft text-brand' : 'text-ink-muted hover:bg-brand-soft'}`
+                  }
+                >
+                  {label}
+                </NavLink>
+              ))}
+            </nav>
+          </div>
         )}
         <main>{children ?? <Outlet />}</main>
       </div>

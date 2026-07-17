@@ -4,12 +4,12 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/features/auth/useAuth'
 import { useViewerArea } from '@/features/auth/useViewerArea'
+import { isRoadmapTreated } from '@/features/roadmap/api'
 import { RoadmapQuarterView } from '@/features/roadmap/RoadmapQuarterView'
 import { useRoadmap } from '@/features/roadmap/useRoadmap'
 import { SemesterFilterSelect } from '@/features/semesters/SemesterFilterSelect'
 import { useSemesterFilter } from '@/features/semesters/useSemesterFilter'
 import { useSemesters } from '@/features/semesters/useSemesters'
-import type { ImsQuarter } from '@/types/domain'
 
 export function CoachRoadmapPage() {
   const { learnerId } = useParams()
@@ -28,17 +28,31 @@ export function CoachRoadmapPage() {
     [semesters, semesterId],
   )
 
-  const imsQuarters = useMemo((): ImsQuarter[] | undefined => {
-    if (!semesterId) return undefined
-    return selectedSemester?.primaryImsQuarters ?? []
-  }, [semesterId, selectedSemester])
-
   const roadmap = useRoadmap({
     learnerId: learnerId!,
     role: profile?.role === 'observer' ? 'observer' : 'coach',
     actorId: profile!.id,
-    imsQuarters,
   })
+
+  const displayedQuarters = useMemo(() => {
+    if (!semesterId) return roadmap.quarters
+    const allowed = new Set(selectedSemester?.primaryImsQuarters ?? [])
+    return roadmap.quarters.filter((quarter) => allowed.has(quarter.imsQuarter))
+  }, [roadmap.quarters, semesterId, selectedSemester])
+
+  const countsBySemesterId = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const semester of semesters) {
+      const allowed = new Set(semester.primaryImsQuarters)
+      const items = roadmap.quarters
+        .filter((quarter) => allowed.has(quarter.imsQuarter))
+        .flatMap((quarter) => [...quarter.school, ...quarter.company])
+      counts[semester.id] = items.filter(({ progress }) =>
+        isRoadmapTreated(progress),
+      ).length
+    }
+    return counts
+  }, [semesters, roadmap.quarters])
 
   if (!learnerId) {
     return <p className="text-sm text-danger">Lernende nicht gefunden.</p>
@@ -61,6 +75,8 @@ export function CoachRoadmapPage() {
           semesters={semesters}
           value={semesterId}
           onChange={onSemesterChange}
+          countsBySemesterId={countsBySemesterId}
+          countLabel="behandelt"
         />
       </div>
 
@@ -75,13 +91,13 @@ export function CoachRoadmapPage() {
         <p className="text-sm text-ink-muted">
           Noch keine Semester für diese lernende Person.
         </p>
-      ) : roadmap.quarters.length === 0 ? (
+      ) : displayedQuarters.length === 0 ? (
         <p className="text-sm text-ink-muted">
           Für dieses Semester sind keine IMS-Quartale konfiguriert.
         </p>
       ) : (
         <div className="space-y-6">
-          {roadmap.quarters.map((quarter) => (
+          {displayedQuarters.map((quarter) => (
             <RoadmapQuarterView
               key={quarter.imsQuarter}
               quarter={quarter}

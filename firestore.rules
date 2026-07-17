@@ -125,6 +125,7 @@ service cloud.firestore {
         || isAssignedCoach(userId)
         || isAssignedObserver(userId)
         || (isLearner() && resource.data.role == 'coach' && hasCoachLearnerLink(userId, uid()))
+        || (isLearner() && resource.data.role == 'observer' && hasObserverLearnerLink(userId, uid()))
       );
       allow list: if false;
 

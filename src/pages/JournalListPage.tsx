@@ -5,7 +5,7 @@ import { JournalList } from '@/features/journal/JournalList'
 import { useAuth } from '@/features/auth/useAuth'
 import { useJournal } from '@/features/journal/useJournal'
 import { useRoadmap } from '@/features/roadmap/useRoadmap'
-import { SemesterFilterSelect } from '@/features/semesters/SemesterFilterSelect'
+import { SemesterFilterSelect, countBySemesterId } from '@/features/semesters/SemesterFilterSelect'
 import { useSemesterFilter } from '@/features/semesters/useSemesterFilter'
 import { useSemesters } from '@/features/semesters/useSemesters'
 import { useMemo } from 'react'
@@ -33,6 +33,10 @@ export function JournalListPage() {
     () => new Map(topics.map(({ item }) => [item.id, item.title])),
     [topics],
   )
+  const countsBySemesterId = useMemo(
+    () => countBySemesterId(entries.filter((entry) => entry.status === 'submitted')),
+    [entries],
+  )
   const filtered = entries.filter(
     (entry) => !semesterId || entry.semesterId === semesterId,
   )
@@ -53,6 +57,8 @@ export function JournalListPage() {
           semesters={semesters}
           value={semesterId}
           onChange={onSemesterChange}
+          countsBySemesterId={countsBySemesterId}
+          countLabel="geschrieben"
         />
       </div>
       <JournalList

@@ -1,8 +1,9 @@
+import { useMemo } from 'react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Skeleton } from '@/components/ui/skeleton'
 import { GoalList } from '@/features/goals/GoalList'
 import { useGoals } from '@/features/goals/useGoals'
-import { SemesterFilterSelect } from '@/features/semesters/SemesterFilterSelect'
+import { SemesterFilterSelect, countBySemesterId } from '@/features/semesters/SemesterFilterSelect'
 import { useSemesterFilter } from '@/features/semesters/useSemesterFilter'
 import { useSemesters } from '@/features/semesters/useSemesters'
 import { useAuth } from '@/features/auth/useAuth'
@@ -19,6 +20,7 @@ export function GoalsPage() {
 
   const loading = semestersLoading || goalsLoading
   const selected = semesters.find((s) => s.id === semesterId)
+  const countsBySemesterId = useMemo(() => countBySemesterId(goals), [goals])
 
   return (
     <>
@@ -35,6 +37,8 @@ export function GoalsPage() {
           semesters={semesters}
           value={semesterId}
           onChange={onSemesterChange}
+          countsBySemesterId={countsBySemesterId}
+          countLabel="Ziele"
         />
       </div>
       {loading ? (

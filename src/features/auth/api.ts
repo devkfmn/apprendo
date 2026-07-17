@@ -145,6 +145,29 @@ export async function getCoachLearnerRelationsForLearner(
   return matches.docs.map((item) => ({ id: item.id, ...item.data() }) as CoachLearnerRelation)
 }
 
+export async function getObserverLearnerRelationsForLearner(
+  learnerId: string,
+): Promise<ObserverLearnerRelation[]> {
+  const matches = await getDocs(
+    query(collection(db, 'observerLearnerRelations'), where('learnerId', '==', learnerId)),
+  )
+  return matches.docs.map((item) => ({ id: item.id, ...item.data() }) as ObserverLearnerRelation)
+}
+
+/** Coaches linked to this learner (for the learner's own overview). */
+export async function listCoachesForLearner(learnerId: string): Promise<UserProfile[]> {
+  const relations = await getCoachLearnerRelationsForLearner(learnerId)
+  const coaches = await Promise.all(relations.map((item) => getUserProfile(item.coachId)))
+  return coaches.filter((coach): coach is UserProfile => coach !== null)
+}
+
+/** Observers linked to this learner (for the learner's own overview). */
+export async function listObserversForLearner(learnerId: string): Promise<UserProfile[]> {
+  const relations = await getObserverLearnerRelationsForLearner(learnerId)
+  const observers = await Promise.all(relations.map((item) => getUserProfile(item.observerId)))
+  return observers.filter((observer): observer is UserProfile => observer !== null)
+}
+
 export async function linkCoachLearner(
   coachId: string,
   learnerId: string,

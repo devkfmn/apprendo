@@ -24,6 +24,7 @@ import {
 import { isCurrentSemester } from '@/features/semesters/defaultTimeline'
 import { carryOverOpenGoals, listGoals } from '@/features/goals/api'
 import { listJournalEntries } from '@/features/journal/api'
+import { countJournalSemesterStats } from '@/features/journal/stats'
 import {
   fetchCompanyItems,
   fetchProgress,
@@ -39,7 +40,6 @@ import { useSemesters } from '@/features/semesters/useSemesters'
 import { useAuth } from '@/features/auth/useAuth'
 import { useViewerArea } from '@/features/auth/useViewerArea'
 import { formatDate } from '@/lib/utils'
-import { weeksBetween } from '@/lib/week'
 import type { Semester } from '@/types/domain'
 
 export function CoachSemestersPage() {
@@ -157,9 +157,6 @@ export function CoachSemestersPage() {
     ])
 
     const semesterGoals = goals.filter((goal) => goal.semesterId === semester.id)
-    const semesterJournals = journals.filter(
-      (entry) => entry.semesterId === semester.id && entry.status === 'submitted',
-    )
     const quarterSet = new Set(semester.primaryImsQuarters)
     const relevantSchool = schoolItems.filter((item) => quarterSet.has(item.imsQuarter))
     const relevantCompany = companyItems.filter(
@@ -170,13 +167,7 @@ export function CoachSemestersPage() {
       ...relevantCompany.map((item) => item.id),
     ])
     const relevantProgress = progress.filter((item) => roadmapIds.has(item.itemId))
-    const expectedWeeks = weeksBetween(semester.startDate, semester.endDate)
-    const submittedKeys = new Set(
-      semesterJournals.map((entry) => `${entry.year}-${entry.calendarWeek}`),
-    )
-    const missingWeeksEstimate = expectedWeeks.filter(
-      (week) => !submittedKeys.has(`${week.year}-${week.calendarWeek}`),
-    ).length
+    const journalStats = countJournalSemesterStats(journals, semester)
 
     setCloseSummary({
       goalsTotal: semesterGoals.length,
@@ -189,8 +180,8 @@ export function CoachSemestersPage() {
         D: semesterGoals.filter((goal) => goal.assessmentGrade === 'D').length,
         E: semesterGoals.filter((goal) => goal.assessmentGrade === 'E').length,
       },
-      journalsSubmitted: semesterJournals.length,
-      missingWeeksEstimate,
+      journalsSubmitted: journalStats.submitted,
+      missingWeeksEstimate: journalStats.missing,
       roadmapTreated: relevantProgress.filter((item) => item.treated).length,
       roadmapTotal: roadmapIds.size,
     })

@@ -6,7 +6,7 @@ import { ReportList } from '@/features/reports/ReportList'
 import { useAuth } from '@/features/auth/useAuth'
 import { useReports } from '@/features/reports/useReports'
 import { useRoadmap } from '@/features/roadmap/useRoadmap'
-import { SemesterFilterSelect } from '@/features/semesters/SemesterFilterSelect'
+import { SemesterFilterSelect, countBySemesterId, resolveSemesterId } from '@/features/semesters/SemesterFilterSelect'
 import { useSemesterFilter } from '@/features/semesters/useSemesterFilter'
 import { useSemesters } from '@/features/semesters/useSemesters'
 
@@ -29,12 +29,20 @@ export function ReportsListPage() {
       ),
     [roadmap.quarters],
   )
+  const submittedReports = useMemo(
+    () => reports.filter((report) => report.status === 'submitted'),
+    [reports],
+  )
+  const countsBySemesterId = useMemo(
+    () => countBySemesterId(submittedReports, semesters),
+    [submittedReports, semesters],
+  )
   const filtered = useMemo(
     () =>
       semesterId
-        ? reports.filter((report) => report.semesterId === semesterId)
+        ? reports.filter((report) => resolveSemesterId(report, semesters) === semesterId)
         : reports,
-    [reports, semesterId],
+    [reports, semesterId, semesters],
   )
 
   return (
@@ -53,6 +61,9 @@ export function ReportsListPage() {
           semesters={semesters}
           value={semesterId}
           onChange={onSemesterChange}
+          countsBySemesterId={countsBySemesterId}
+          totalCount={submittedReports.length}
+          countLabel="geschrieben"
         />
       </div>
       <ReportList

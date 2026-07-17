@@ -1,5 +1,5 @@
 import { Link, useParams } from 'react-router-dom'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -13,7 +13,7 @@ import { GoalForm } from '@/features/goals/GoalForm'
 import { GoalList } from '@/features/goals/GoalList'
 import { createGoal, updateGoal } from '@/features/goals/api'
 import { useGoals } from '@/features/goals/useGoals'
-import { SemesterFilterSelect } from '@/features/semesters/SemesterFilterSelect'
+import { SemesterFilterSelect, countBySemesterId } from '@/features/semesters/SemesterFilterSelect'
 import { useSemesterFilter } from '@/features/semesters/useSemesterFilter'
 import { useSemesters } from '@/features/semesters/useSemesters'
 import { useAuth } from '@/features/auth/useAuth'
@@ -36,6 +36,7 @@ export function CoachGoalsPage() {
   const [editingGoal, setEditingGoal] = useState<SemesterGoal | null>(null)
 
   const selected = semesters.find((s) => s.id === semesterId)
+  const countsBySemesterId = useMemo(() => countBySemesterId(goals), [goals])
 
   const openCreate = () => {
     setEditingGoal(null)
@@ -92,6 +93,8 @@ export function CoachGoalsPage() {
           semesters={semesters}
           value={semesterId}
           onChange={onSemesterChange}
+          countsBySemesterId={countsBySemesterId}
+          countLabel="Ziele"
         />
       </div>
       {canEdit && semesters.length === 0 ? (

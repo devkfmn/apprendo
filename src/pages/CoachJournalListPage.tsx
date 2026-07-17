@@ -6,7 +6,7 @@ import { useAuth } from '@/features/auth/useAuth'
 import { useViewerArea } from '@/features/auth/useViewerArea'
 import { useJournal } from '@/features/journal/useJournal'
 import { useRoadmap } from '@/features/roadmap/useRoadmap'
-import { SemesterFilterSelect } from '@/features/semesters/SemesterFilterSelect'
+import { SemesterFilterSelect, countBySemesterId } from '@/features/semesters/SemesterFilterSelect'
 import { useSemesterFilter } from '@/features/semesters/useSemesterFilter'
 import { useSemesters } from '@/features/semesters/useSemesters'
 
@@ -33,6 +33,7 @@ export function CoachJournalListPage() {
     () => new Map(topics.map(({ item }) => [item.id, item.title])),
     [topics],
   )
+  const countsBySemesterId = useMemo(() => countBySemesterId(entries), [entries])
   const filtered = entries.filter(
     (entry) => !semesterId || entry.semesterId === semesterId,
   )
@@ -48,6 +49,8 @@ export function CoachJournalListPage() {
           semesters={semesters}
           value={semesterId}
           onChange={onSemesterChange}
+          countsBySemesterId={countsBySemesterId}
+          countLabel="geschrieben"
         />
       </div>
       <JournalList
