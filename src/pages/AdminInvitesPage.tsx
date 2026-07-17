@@ -13,8 +13,8 @@ import {
   deleteInvite,
   listAllInvites,
   listUsersByRole,
-  sendInviteEmail,
 } from '@/features/admin/api'
+import { buildInviteMessage } from '@/features/admin/inviteMessage'
 import {
   ADMIN_PAGE_SIZE,
   clampPage,
@@ -30,17 +30,11 @@ const INVITE_ROLES: InviteRole[] = ['coach', 'learner', 'observer', 'admin']
 
 type StatusFilter = 'all' | 'open' | 'used'
 
-function emailStatusBadge(invite: Invite) {
+function statusBadge(invite: Invite) {
   if (invite.used) {
     return <Badge variant="secondary">verwendet</Badge>
   }
-  if (invite.emailStatus === 'sent') {
-    return <Badge variant="default">E-Mail gesendet</Badge>
-  }
-  if (invite.emailStatus === 'failed') {
-    return <Badge variant="warning">E-Mail fehlgeschlagen</Badge>
-  }
-  return <Badge variant="outline">noch nicht gesendet</Badge>
+  return <Badge variant="outline">offen</Badge>
 }
 
 export function AdminInvitesPage() {
@@ -50,8 +44,8 @@ export function AdminInvitesPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [sendingCode, setSendingCode] = useState<string | null>(null)
   const [formOpen, setFormOpen] = useState(false)
+  const [shareInvite, setShareInvite] = useState<Invite | null>(null)
 
   const [email, setEmail] = useState('')
   const [displayName, setDisplayName] = useState('')
@@ -104,29 +98,17 @@ export function AdminInvitesPage() {
   const safePage = clampPage(page, filtered.length)
   const pageItems = paginateItems(filtered, safePage)
   const openCount = invites?.filter((invite) => !invite.used).length ?? 0
+  const shareMessage = shareInvite ? buildInviteMessage(shareInvite) : ''
 
-  async function sendEmailFor(inviteCode: string, created = false) {
-    setSendingCode(inviteCode)
+  async function copyMessage(invite: Invite) {
+    const message = buildInviteMessage(invite)
     try {
-      const result = await sendInviteEmail(inviteCode)
-      setSuccess(
-        created
-          ? `Einladung «${inviteCode}» erstellt und an ${result.email} gesendet.`
-          : `E-Mail an ${result.email} gesendet.`,
-      )
-      await refresh()
-    } catch (reason) {
-      const message =
-        reason instanceof Error ? reason.message : 'E-Mail konnte nicht gesendet werden.'
-      if (created) {
-        setSuccess(`Einladung «${inviteCode}» erstellt.`)
-        setError(`E-Mail nicht gesendet: ${message}`)
-      } else {
-        setError(message)
-      }
-      await refresh()
-    } finally {
-      setSendingCode(null)
+      await navigator.clipboard.writeText(message)
+      setShareInvite(invite)
+      setSuccess(`Einladungsnachricht für ${invite.email} kopiert.`)
+    } catch {
+      setShareInvite(invite)
+      setError('Kopieren fehlgeschlagen — Nachricht unten manuell markieren.')
     }
   }
 
@@ -158,7 +140,9 @@ export function AdminInvitesPage() {
       setCoachId('')
       setLearnerIds([])
       setFormOpen(false)
-      await sendEmailFor(invite.code, true)
+      await refresh()
+      await copyMessage(invite)
+      setSuccess(`Einladung «${invite.code}» erstellt — Nachricht ist in der Zwischenablage.`)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Einladung konnte nicht erstellt werden.')
     } finally {
@@ -171,6 +155,7 @@ export function AdminInvitesPage() {
     setSuccess('')
     try {
       await deleteInvite(inviteCode)
+      if (shareInvite?.code === inviteCode) setShareInvite(null)
       setSuccess('Einladung gelöscht.')
       await refresh()
     } catch {
@@ -178,20 +163,11 @@ export function AdminInvitesPage() {
     }
   }
 
-  async function copyCode(inviteCode: string) {
-    try {
-      await navigator.clipboard.writeText(inviteCode)
-      setSuccess(`Code «${inviteCode}» kopiert.`)
-    } catch {
-      setError('Code konnte nicht kopiert werden.')
-    }
-  }
-
   return (
     <div>
       <PageHeader
         title="Einladungen"
-        description="Einladungen erstellen und per E-Mail versenden. Empfänger öffnen den Link zum Signup."
+        description="Einladungen erstellen und die Nachricht manuell per WhatsApp, Mail oder Chat weiterleiten."
         actions={
           <Button type="button" onClick={() => setFormOpen((open) => !open)}>
             {formOpen ? 'Formular schliessen' : 'Neue Einladung'}
@@ -268,13 +244,44 @@ export function AdminInvitesPage() {
               </div>
             ) : null}
             <div className="sm:col-span-2">
-              <Button type="submit" disabled={submitting || Boolean(sendingCode)}>
-                {submitting || sendingCode
-                  ? 'Erstellen & senden …'
-                  : 'Einladung erstellen & per E-Mail senden'}
+              <Button type="submit" disabled={submitting}>
+                {submitting ? 'Erstellen …' : 'Einladung erstellen & Nachricht kopieren'}
               </Button>
             </div>
           </form>
+        </Card>
+      ) : null}
+
+      {shareInvite ? (
+        <Card className="mb-8">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle>Einladungsnachricht</CardTitle>
+              <p className="mt-1 text-sm text-ink-muted">
+                Für {shareInvite.email} ({roleLabel(shareInvite.role)}) — in WhatsApp, Mail oder
+                Chat einfügen.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => void copyMessage(shareInvite)}
+              >
+                Erneut kopieren
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setShareInvite(null)}>
+                Schliessen
+              </Button>
+            </div>
+          </div>
+          <textarea
+            className="mt-4 min-h-48 w-full resize-y rounded-lg border border-line bg-canvas px-3 py-2 font-sans text-sm leading-relaxed text-ink"
+            readOnly
+            value={shareMessage}
+            onFocus={(event) => event.currentTarget.select()}
+          />
         </Card>
       ) : null}
 
@@ -331,43 +338,26 @@ export function AdminInvitesPage() {
                   <tr key={invite.code} className="border-b border-line/70 last:border-0">
                     <td className="px-4 py-3">
                       <p className="font-medium">{invite.email}</p>
-                      <button
-                        type="button"
-                        className="font-mono text-xs text-brand hover:underline"
-                        onClick={() => void copyCode(invite.code)}
-                      >
-                        {invite.code}
-                      </button>
+                      <p className="font-mono text-xs text-ink-muted">{invite.code}</p>
                       <p className="text-xs text-ink-muted">
                         Erstellt {formatDateTime(invite.createdAt)}
-                        {invite.emailSentAt
-                          ? ` · Gesendet ${formatDateTime(invite.emailSentAt)}`
-                          : ''}
                       </p>
-                      {invite.emailStatus === 'failed' && invite.emailError ? (
-                        <p className="mt-1 text-xs text-danger">{invite.emailError}</p>
-                      ) : null}
                     </td>
                     <td className="hidden px-4 py-3 sm:table-cell">{roleLabel(invite.role)}</td>
-                    <td className="px-4 py-3">{emailStatusBadge(invite)}</td>
+                    <td className="px-4 py-3">{statusBadge(invite)}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex flex-wrap justify-end gap-1">
                         {!invite.used ? (
                           <Button
                             variant="secondary"
                             size="sm"
-                            disabled={sendingCode === invite.code}
                             onClick={() => {
                               setError('')
                               setSuccess('')
-                              void sendEmailFor(invite.code)
+                              void copyMessage(invite)
                             }}
                           >
-                            {sendingCode === invite.code
-                              ? 'Senden …'
-                              : invite.emailStatus === 'sent'
-                                ? 'Erneut senden'
-                                : 'E-Mail senden'}
+                            Nachricht kopieren
                           </Button>
                         ) : null}
                         {!invite.used ? (

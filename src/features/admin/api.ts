@@ -8,7 +8,7 @@ import {
   updateDoc,
   where,
 } from 'firebase/firestore'
-import { auth, db } from '@/lib/firebase'
+import { db } from '@/lib/firebase'
 import type {
   CoachLearnerRelation,
   InviteRole,
@@ -95,8 +95,6 @@ export async function createInvite(input: {
     displayName: input.displayName?.trim() || null,
     used: false,
     createdAt: now(),
-    emailStatus: 'pending',
-    emailSendCount: 0,
   }
   await setDoc(doc(db, 'invites', code), {
     email: invite.email,
@@ -106,34 +104,8 @@ export async function createInvite(input: {
     displayName: invite.displayName,
     used: invite.used,
     createdAt: invite.createdAt,
-    emailStatus: invite.emailStatus,
-    emailSendCount: invite.emailSendCount,
   })
   return invite
-}
-
-/** Sends (or resends) the invite email via Vercel API + Resend. */
-export async function sendInviteEmail(code: string): Promise<{ email: string }> {
-  const user = auth.currentUser
-  if (!user) throw new Error('Anmeldung erforderlich.')
-  const idToken = await user.getIdToken()
-  const response = await fetch('/api/send-invite-email', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${idToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ code }),
-  })
-  const payload = (await response.json().catch(() => ({}))) as {
-    ok?: boolean
-    email?: string
-    error?: string
-  }
-  if (!response.ok || !payload.email) {
-    throw new Error(payload.error || 'E-Mail konnte nicht gesendet werden.')
-  }
-  return { email: payload.email }
 }
 
 export async function deleteInvite(code: string): Promise<void> {

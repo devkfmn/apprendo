@@ -13,8 +13,7 @@ Interne Web-App zur Begleitung der Ausbildung (Wochenrückblicke, Semesterziele,
 - Tailwind CSS
 - Firebase Auth + Cloud Firestore
 - React Router
-- Hosting: Vercel (Frontend + `/api` for invite emails) + Firebase (Auth/Firestore)
-- Invite emails: Resend via Vercel Function `api/send-invite-email`
+- Hosting: Vercel (Frontend) + Firebase (Auth/Firestore)
 
 ## Lokal starten
 
@@ -54,43 +53,18 @@ Rollen:
 | **Lernender** | `learner` | eigener Bereich, Schreiben erlaubt |
 | **Beobachter** | `observer` | kann mehrere Lernende **nur lesen** |
 
-Signup unter `/signup` mit Einladungscode (oder Deep-Link aus der E-Mail:
+Signup unter `/signup` mit Einladungscode (oder Deep-Link:
 `/signup?code=…&email=…`).
 
-### Einladungs-E-Mails (Ops-Konsole)
+### Einladungen (Ops-Konsole)
 
-Die Admin-Konsole (`/ops/invites`) erstellt Einladungen und sendet sie per E-Mail
-über die Vercel Function [`api/send-invite-email.ts`](api/send-invite-email.ts) und [Resend](https://resend.com).
+Die Admin-Konsole (`/ops/invites`) erstellt Einladungen und kopiert eine fertige
+Nachricht (Link + Code) in die Zwischenablage — zum manuellen Weiterleiten per
+WhatsApp, Mail oder Chat. Automatischer E-Mail-Versand ist absichtlich nicht aktiv
+(braucht eine eigene Absender-Domain).
 
-Einmalig in Vercel (Project → Settings → Environment Variables) setzen:
-
-| Variable | Beispiel | Pflicht |
-|----------|----------|---------|
-| `RESEND_API_KEY` | `re_…` | ja |
-| `FIREBASE_API_KEY` | gleicher Wert wie `VITE_FIREBASE_API_KEY` | ja |
-| `FIREBASE_PROJECT_ID` | `apprendo-kfmn` | empfohlen |
-| `APP_URL` | `https://apprendo.vercel.app` | nein (Default wie links) |
-| `INVITE_FROM_EMAIL` | `Apprendo <einladungen@deine-domain.ch>` | nein (Default: Resend-Testabsender) |
-
-```bash
-# CLI-Alternative (nach vercel link):
-npx vercel env add RESEND_API_KEY production
-npx vercel env add FIREBASE_API_KEY production
-npx vercel env add FIREBASE_PROJECT_ID production
-```
-
-1. Resend-Account anlegen, API-Key erzeugen, Absender-Domain verifizieren.
-2. Env-Vars in Vercel setzen (Production + Preview).
-3. Deploy (Push auf `main` oder `npx vercel --prod`).
-4. Firestore-Regeln deployen (E-Mail-Status-Felder):
-
-```bash
-npx -y firebase-tools@latest deploy --only firestore:rules --project apprendo-kfmn
-```
-
-Danach in Ops → Einladungen: «Einladung erstellen & per E-Mail senden» bzw. «Erneut senden».
-
-> Hinweis: Firebase Cloud Functions bräuchten den Blaze-Plan. Deshalb läuft der Versand über Vercel.
+Optional in `.env` / Vercel: `VITE_APP_URL=https://apprendo.vercel.app`
+(sonst wird lokal die Production-URL für Signup-Links verwendet).
 
 ## MVP-Definition of Done
 

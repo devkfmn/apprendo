@@ -144,23 +144,6 @@ service cloud.firestore {
         && request.resource.data.used == true
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['used'])
         && request.auth.token.email.lower() == resource.data.email.lower();
-
-      // Admin / Ops API may stamp invite email delivery metadata.
-      allow update: if isAdmin()
-        && unchangedKeys([
-          'email', 'role', 'coachId', 'learnerIds', 'displayName', 'used', 'createdAt'
-        ])
-        && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['emailSentAt', 'emailStatus', 'emailError', 'emailSendCount'])
-        && (
-          !('emailStatus' in request.resource.data)
-          || request.resource.data.emailStatus in ['pending', 'sent', 'failed']
-        )
-        && (
-          !('emailSendCount' in request.resource.data)
-          || request.resource.data.emailSendCount is int
-          || request.resource.data.emailSendCount is float
-        );
     }
 
     // —— Users ——
