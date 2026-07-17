@@ -1,9 +1,10 @@
 /**
  * Creates invite docs using Firebase CLI credentials (no service account).
  *
- * Roles: Coach (`coach`), Lernender (`lernender`/`learner`), Beobachter (`beobachter`/`observer`).
+ * Roles: Admin (`admin`), Coach (`coach`), Lernender (`lernender`/`learner`), Beobachter (`beobachter`/`observer`).
  *
  * Usage:
+ *   npx tsx scripts/invite-user-cli.ts --email admin@example.com --role admin --code admin-1
  *   npx tsx scripts/invite-user-cli.ts --email coach@example.com --role coach --code coach-1
  *   npx tsx scripts/invite-user-cli.ts --email learner@example.com --role lernender --coachId <uid> --code learner-1
  *   npx tsx scripts/invite-user-cli.ts --email observer@example.com --role beobachter --learnerIds <uid1,uid2> --code obs-1
@@ -72,11 +73,12 @@ function toFirestoreFields(value: unknown): Record<string, unknown> {
   return { stringValue: String(value) }
 }
 
-type StoredRole = 'coach' | 'learner' | 'observer'
+type StoredRole = 'admin' | 'coach' | 'learner' | 'observer'
 
 function parseRole(raw: string | undefined): StoredRole | null {
   if (!raw) return null
   const normalized = raw.trim().toLowerCase()
+  if (normalized === 'admin') return 'admin'
   if (normalized === 'coach') return 'coach'
   if (normalized === 'lernender' || normalized === 'learner') return 'learner'
   if (normalized === 'beobachter' || normalized === 'observer') return 'observer'
@@ -84,6 +86,7 @@ function parseRole(raw: string | undefined): StoredRole | null {
 }
 
 function roleLabel(role: StoredRole): string {
+  if (role === 'admin') return 'Admin'
   if (role === 'coach') return 'Coach'
   if (role === 'observer') return 'Beobachter'
   return 'Lernender'
@@ -107,7 +110,7 @@ async function main() {
 
   if (!email || !role) {
     console.error(
-      'Required: --email <email> --role <coach|lernender|beobachter> [--coachId <uid>] [--learnerIds <uid,uid>] [--code <code>] [--name <displayName>]',
+      'Required: --email <email> --role <admin|coach|lernender|beobachter> [--coachId <uid>] [--learnerIds <uid,uid>] [--code <code>] [--name <displayName>]',
     )
     process.exit(1)
   }

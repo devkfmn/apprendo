@@ -1,5 +1,8 @@
 /** Stored role keys in Auth/Firestore. Display via `roleLabel`. */
-export type UserRole = 'coach' | 'learner' | 'observer'
+export type UserRole = 'admin' | 'coach' | 'learner' | 'observer'
+
+/** Roles that can be invited through the signup flow (includes admin for bootstrap). */
+export type InviteRole = UserRole
 
 export type SemesterStatus = 'planned' | 'active' | 'completed'
 
@@ -51,7 +54,10 @@ export interface UserProfile {
   id: string
   email: string
   displayName: string
+  /** Operational app role (coach/learner/observer). May be `admin` for ops-only accounts. */
   role: UserRole
+  /** Admin console access on top of the operational role (e.g. coach + admin). */
+  isAdmin?: boolean
   coachId?: string | null
   /** Used once at signup so security rules can validate against invites/{code}. */
   inviteCode?: string | null

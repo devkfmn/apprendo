@@ -2,14 +2,14 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { BrandLogo } from '@/components/brand/BrandLogo'
 import { useAuth } from '@/features/auth/useAuth'
-import { roleHome } from '@/lib/utils'
+import { profileHome } from '@/lib/utils'
 
 export function ForbiddenPage() {
   const { user, profile, logout } = useAuth()
   const navigate = useNavigate()
   const [signingOut, setSigningOut] = useState(false)
 
-  const homePath = profile ? roleHome(profile.role) : '/'
+  const homePath = profile ? profileHome(profile) : '/'
 
   async function goToLogin() {
     setSigningOut(true)

@@ -40,6 +40,7 @@ export function SignupPage() {
         email: email.trim(),
         displayName: displayName.trim() || invite.displayName || email.trim(),
         role: invite.role,
+        isAdmin: invite.role === 'admin' ? true : undefined,
         coachId: invite.coachId ?? null,
         inviteCode: invite.code,
         createdAt: timestamp,

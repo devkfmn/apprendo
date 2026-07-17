@@ -1,9 +1,16 @@
 import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom'
+import { RootLayout } from '@/app/RootLayout'
+import { RequireAdmin } from '@/components/auth/RequireAdmin'
 import { RequireAuth } from '@/components/auth/RequireAuth'
 import { RequireLearnerAccess } from '@/components/auth/RequireLearnerAccess'
 import { AppShell } from '@/components/layout/AppShell'
+import { AdminShell } from '@/features/admin/AdminShell'
 import { useAuth } from '@/features/auth/useAuth'
-import { roleHome } from '@/lib/utils'
+import { adminConsolePath } from '@/lib/adminPath'
+import { profileHome } from '@/lib/utils'
+import { AdminInvitesPage } from '@/pages/AdminInvitesPage'
+import { AdminMappingsPage } from '@/pages/AdminMappingsPage'
+import { AdminUsersPage } from '@/pages/AdminUsersPage'
 import { CoachGoalsPage } from '@/pages/CoachGoalsPage'
 import { CoachJournalDetailPage } from '@/pages/CoachJournalDetailPage'
 import { CoachJournalListPage } from '@/pages/CoachJournalListPage'
@@ -24,10 +31,16 @@ import { ReportsListPage } from '@/pages/ReportsListPage'
 import { RoadmapPage } from '@/pages/RoadmapPage'
 import { SignupPage } from '@/pages/SignupPage'
 
+const adminPath = adminConsolePath()
+
 function RoleIndex() {
   const { profile } = useAuth()
-  if (profile?.role === 'coach' || profile?.role === 'observer') {
-    return <Navigate to={roleHome(profile.role)} replace />
+  if (
+    profile?.role === 'admin' ||
+    profile?.role === 'coach' ||
+    profile?.role === 'observer'
+  ) {
+    return <Navigate to={profileHome(profile)} replace />
   }
   return (
     <RequireAuth roles="learner">
@@ -62,6 +75,14 @@ function ObserverArea() {
   )
 }
 
+function AdminArea() {
+  return (
+    <RequireAdmin>
+      <AdminShell />
+    </RequireAdmin>
+  )
+}
+
 function ProtectedIndex() {
   return (
     <RequireAuth>
@@ -82,49 +103,62 @@ const viewerLearnerRoutes = [
 ]
 
 export const router = createBrowserRouter([
-  { path: '/login', element: <LoginPage /> },
-  { path: '/signup', element: <SignupPage /> },
-  { path: '/forbidden', element: <ForbiddenPage /> },
   {
-    element: <ProtectedIndex />,
+    element: <RootLayout />,
     children: [
-      { path: '/', element: <RoleIndex /> },
+      { path: '/login', element: <LoginPage /> },
+      { path: '/signup', element: <SignupPage /> },
+      { path: '/forbidden', element: <ForbiddenPage /> },
       {
-        element: <LearnerArea />,
+        element: <ProtectedIndex />,
         children: [
-          { path: '/journal', element: <JournalListPage /> },
-          { path: '/journal/new', element: <JournalEditPage /> },
-          { path: '/journal/:entryId', element: <JournalEditPage /> },
-          { path: '/reports', element: <ReportsListPage /> },
-          { path: '/reports/new', element: <ReportEditPage /> },
-          { path: '/reports/:reportId', element: <ReportEditPage /> },
-          { path: '/goals', element: <GoalsPage /> },
-          { path: '/roadmap', element: <RoadmapPage /> },
-        ],
-      },
-      {
-        element: <CoachArea />,
-        children: [
-          { path: '/coach', element: <LearnerListPage /> },
+          { path: '/', element: <RoleIndex /> },
           {
-            path: '/coach/learners/:learnerId',
-            element: <RequireLearnerAccess />,
-            children: viewerLearnerRoutes,
+            element: <LearnerArea />,
+            children: [
+              { path: '/journal', element: <JournalListPage /> },
+              { path: '/journal/new', element: <JournalEditPage /> },
+              { path: '/journal/:entryId', element: <JournalEditPage /> },
+              { path: '/reports', element: <ReportsListPage /> },
+              { path: '/reports/new', element: <ReportEditPage /> },
+              { path: '/reports/:reportId', element: <ReportEditPage /> },
+              { path: '/goals', element: <GoalsPage /> },
+              { path: '/roadmap', element: <RoadmapPage /> },
+            ],
+          },
+          {
+            element: <CoachArea />,
+            children: [
+              { path: '/coach', element: <LearnerListPage /> },
+              {
+                path: '/coach/learners/:learnerId',
+                element: <RequireLearnerAccess />,
+                children: viewerLearnerRoutes,
+              },
+            ],
+          },
+          {
+            element: <ObserverArea />,
+            children: [
+              { path: '/beobachter', element: <LearnerListPage /> },
+              {
+                path: '/beobachter/learners/:learnerId',
+                element: <RequireLearnerAccess />,
+                children: viewerLearnerRoutes,
+              },
+            ],
+          },
+          {
+            element: <AdminArea />,
+            children: [
+              { path: adminPath, element: <AdminUsersPage /> },
+              { path: `${adminPath}/invites`, element: <AdminInvitesPage /> },
+              { path: `${adminPath}/mappings`, element: <AdminMappingsPage /> },
+            ],
           },
         ],
       },
-      {
-        element: <ObserverArea />,
-        children: [
-          { path: '/beobachter', element: <LearnerListPage /> },
-          {
-            path: '/beobachter/learners/:learnerId',
-            element: <RequireLearnerAccess />,
-            children: viewerLearnerRoutes,
-          },
-        ],
-      },
+      { path: '*', element: <Navigate to="/" replace /> },
     ],
   },
-  { path: '*', element: <Navigate to="/" replace /> },
 ])

@@ -1,10 +1,11 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { NavLink, Outlet, useParams } from 'react-router-dom'
+import { NavLink, Outlet, useNavigate, useParams } from 'react-router-dom'
 import { BrandLogo } from '@/components/brand/BrandLogo'
 import { Button } from '@/components/ui/button'
 import { getUserProfile } from '@/features/auth/api'
 import { useAuth } from '@/features/auth/useAuth'
-import { roleLabel, viewerAreaBase } from '@/lib/utils'
+import { adminConsolePath } from '@/lib/adminPath'
+import { profileIsAdmin, profileRoleLabel, viewerAreaBase } from '@/lib/utils'
 
 const learnerLinks = [
   ['Übersicht', '/'],
@@ -16,10 +17,12 @@ const learnerLinks = [
 
 export function AppShell({ children }: { children?: ReactNode }) {
   const { profile, logout } = useAuth()
+  const navigate = useNavigate()
   const { learnerId } = useParams()
   const areaBase = profile ? viewerAreaBase(profile.role) : null
   const isViewer = Boolean(areaBase)
   const canEdit = profile?.role === 'coach'
+  const showOpsSwitch = profileIsAdmin(profile)
   const links = isViewer
     ? ([['Lernende', areaBase!] as const])
     : learnerLinks
@@ -59,8 +62,18 @@ export function AppShell({ children }: { children?: ReactNode }) {
           <div className="flex items-center gap-3 text-sm">
             <span className="text-right">
               <strong className="block font-semibold">{profile?.displayName}</strong>
-              <span className="text-ink-muted">{roleLabel(profile?.role)}</span>
+              <span className="text-ink-muted">{profileRoleLabel(profile)}</span>
             </span>
+            {showOpsSwitch ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                type="button"
+                onClick={() => navigate(adminConsolePath())}
+              >
+                Ops
+              </Button>
+            ) : null}
             <Button variant="outline" size="sm" onClick={() => void logout()}>
               Abmelden
             </Button>

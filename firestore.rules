@@ -34,6 +34,14 @@ service cloud.firestore {
       return signedIn() && myRole() == 'observer';
     }
 
+    // Ops-only accounts use role == 'admin'; coach/learner/observer may also set isAdmin.
+    function isAdmin() {
+      return signedIn() && (
+        myRole() == 'admin'
+        || myUser().data.isAdmin == true
+      );
+    }
+
     function relationId(a, b) {
       return a + '_' + b;
     }
@@ -106,11 +114,31 @@ service cloud.firestore {
         && request.resource.data.updatedAt is string;
     }
 
-    // —— Invites (code is secret; Admin SDK / CLI creates them) ——
+    // —— Invites (code is secret; admin console or Admin SDK / CLI creates them) ——
     match /invites/{code} {
       allow get: if true;
-      allow list: if false;
-      allow create, delete: if false;
+      allow list: if isAdmin();
+      allow create: if isAdmin()
+        && request.resource.data.email is string
+        && request.resource.data.email.size() > 3
+        && request.resource.data.role in ['admin', 'coach', 'learner', 'observer']
+        && request.resource.data.used == false
+        && request.resource.data.createdAt is string
+        && (
+          request.resource.data.role != 'learner'
+          || (
+            request.resource.data.coachId is string
+            && request.resource.data.coachId.size() > 0
+          )
+        )
+        && (
+          request.resource.data.role != 'observer'
+          || (
+            request.resource.data.learnerIds is list
+            && request.resource.data.learnerIds.size() > 0
+          )
+        );
+      allow delete: if isAdmin();
       allow update: if signedIn()
         && resource.data.used == false
         && request.resource.data.used == true
@@ -121,13 +149,14 @@ service cloud.firestore {
     // —— Users ——
     match /users/{userId} {
       allow get: if signedIn() && (
-        uid() == userId
+        isAdmin()
+        || uid() == userId
         || isAssignedCoach(userId)
         || isAssignedObserver(userId)
         || (isLearner() && resource.data.role == 'coach' && hasCoachLearnerLink(userId, uid()))
         || (isLearner() && resource.data.role == 'observer' && hasObserverLearnerLink(userId, uid()))
       );
-      allow list: if false;
+      allow list: if isAdmin();
 
       allow create: if signedIn()
         && uid() == userId
@@ -136,7 +165,7 @@ service cloud.firestore {
         && request.resource.data.displayName is string
         && request.resource.data.displayName.size() > 0
         && request.resource.data.displayName.size() <= 120
-        && request.resource.data.role in ['coach', 'learner', 'observer']
+        && request.resource.data.role in ['admin', 'coach', 'learner', 'observer']
         && request.resource.data.inviteCode is string
         && exists(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode))
         && inviteDoc().data.used == false
@@ -149,7 +178,9 @@ service cloud.firestore {
 
       allow update: if signedIn()
         && uid() == userId
-        && unchangedKeys(['id', 'role', 'email', 'coachId', 'inviteCode', 'createdAt', 'lehrbeginnYear']);
+        && unchangedKeys([
+          'id', 'role', 'isAdmin', 'email', 'coachId', 'inviteCode', 'createdAt', 'lehrbeginnYear'
+        ]);
 
       // Assigned coach may set Lehrbeginn year on a learner profile.
       // Client SDK stores numbers as float — accept int or float.
@@ -189,28 +220,39 @@ service cloud.firestore {
 
     // —— Coach ↔ Lernender links ——
     match /coachLearnerRelations/{relationDocId} {
-      allow read: if signedIn() && (
+      allow read: if isAdmin() || (signedIn() && (
         resource.data.coachId == uid() || resource.data.learnerId == uid()
-      );
+      ));
 
-      allow create: if signedIn()
+      allow create: if (
+        signedIn()
         && request.resource.data.learnerId == uid()
         && request.resource.data.coachId is string
         && request.resource.data.id == relationDocId
         && relationDocId == relationId(request.resource.data.coachId, request.resource.data.learnerId)
         && myUser().data.role == 'learner'
-        && myUser().data.coachId == request.resource.data.coachId;
+        && myUser().data.coachId == request.resource.data.coachId
+      ) || (
+        isAdmin()
+        && request.resource.data.coachId is string
+        && request.resource.data.learnerId is string
+        && request.resource.data.id == relationDocId
+        && relationDocId == relationId(request.resource.data.coachId, request.resource.data.learnerId)
+        && request.resource.data.createdAt is string
+      );
 
-      allow update, delete: if false;
+      allow update: if false;
+      allow delete: if isAdmin();
     }
 
     // —— Beobachter ↔ Lernender links (read-only viewers) ——
     match /observerLearnerRelations/{relationDocId} {
-      allow read: if signedIn() && (
+      allow read: if isAdmin() || (signedIn() && (
         resource.data.observerId == uid() || resource.data.learnerId == uid()
-      );
+      ));
 
-      allow create: if signedIn()
+      allow create: if (
+        signedIn()
         && request.resource.data.observerId == uid()
         && request.resource.data.learnerId is string
         && request.resource.data.id == relationDocId
@@ -221,9 +263,18 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/invites/$(myUser().data.inviteCode)).data.used == false
         && get(/databases/$(database)/documents/invites/$(myUser().data.inviteCode)).data.role == 'observer'
         && request.resource.data.learnerId
-          in get(/databases/$(database)/documents/invites/$(myUser().data.inviteCode)).data.learnerIds;
+          in get(/databases/$(database)/documents/invites/$(myUser().data.inviteCode)).data.learnerIds
+      ) || (
+        isAdmin()
+        && request.resource.data.observerId is string
+        && request.resource.data.learnerId is string
+        && request.resource.data.id == relationDocId
+        && relationDocId == relationId(request.resource.data.observerId, request.resource.data.learnerId)
+        && request.resource.data.createdAt is string
+      );
 
-      allow update, delete: if false;
+      allow update: if false;
+      allow delete: if isAdmin();
     }
 
     // —— Fixed school roadmap (read-only for clients) ——

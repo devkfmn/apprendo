@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuth } from '@/features/auth/useAuth'
-import { roleHome } from '@/lib/utils'
+import { isAdminConsolePath } from '@/lib/adminPath'
+import { profileHome, profileIsAdmin } from '@/lib/utils'
 
 export function LoginPage() {
   const { user, profile, loading, login } = useAuth()
@@ -20,7 +21,7 @@ export function LoginPage() {
   if (loading) return <AppLoadingScreen />
 
   if (user && profile) {
-    return <Navigate to={roleHome(profile.role)} replace />
+    return <Navigate to={profileHome(profile)} replace />
   }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -36,14 +37,16 @@ export function LoginPage() {
       const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname
       const safeFrom =
         from && from !== '/forbidden' && from !== '/login' && from !== '/signup' ? from : null
-      const home = roleHome(nextProfile.role)
+      const home = profileHome(nextProfile)
       const destination =
         safeFrom &&
-        ((nextProfile.role === 'coach' && safeFrom.startsWith('/coach')) ||
+        ((profileIsAdmin(nextProfile) && isAdminConsolePath(safeFrom)) ||
+          (nextProfile.role === 'coach' && safeFrom.startsWith('/coach')) ||
           (nextProfile.role === 'observer' && safeFrom.startsWith('/beobachter')) ||
           (nextProfile.role === 'learner' &&
             !safeFrom.startsWith('/coach') &&
-            !safeFrom.startsWith('/beobachter')))
+            !safeFrom.startsWith('/beobachter') &&
+            !isAdminConsolePath(safeFrom)))
           ? safeFrom
           : home
       navigate(destination, { replace: true })

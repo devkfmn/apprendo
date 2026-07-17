@@ -1,9 +1,11 @@
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
-import type { UserRole } from '@/types/domain'
+import { adminConsolePath } from '@/lib/adminPath'
+import type { UserProfile, UserRole } from '@/types/domain'
 
-/** User-facing role labels. Stored keys: `coach` | `learner` | `observer`. */
+/** User-facing role labels. Stored keys: `admin` | `coach` | `learner` | `observer`. */
 export const ROLE_LABELS: Record<UserRole, string> = {
+  admin: 'Admin',
   coach: 'Coach',
   learner: 'Lernender',
   observer: 'Beobachter',
@@ -14,11 +16,35 @@ export function roleLabel(role?: UserRole | null): string {
   return ROLE_LABELS[role]
 }
 
+/** True when the profile may open the admin console. */
+export function profileIsAdmin(
+  profile?: Pick<UserProfile, 'role' | 'isAdmin'> | null,
+): boolean {
+  if (!profile) return false
+  return profile.role === 'admin' || profile.isAdmin === true
+}
+
+/** Display label including admin capability when stacked on another role. */
+export function profileRoleLabel(
+  profile?: Pick<UserProfile, 'role' | 'isAdmin'> | null,
+): string {
+  if (!profile) return ''
+  if (profile.role === 'admin') return ROLE_LABELS.admin
+  if (profile.isAdmin) return `${ROLE_LABELS[profile.role]} · Admin`
+  return ROLE_LABELS[profile.role]
+}
+
 /** App home path for a role after login/signup. */
 export function roleHome(role: UserRole): string {
+  if (role === 'admin') return adminConsolePath()
   if (role === 'coach') return '/coach'
   if (role === 'observer') return '/beobachter'
   return '/'
+}
+
+/** Home for a full profile (coach+admin lands in coach UI). */
+export function profileHome(profile: Pick<UserProfile, 'role'>): string {
+  return roleHome(profile.role)
 }
 
 /** Base path for coach/observer learner areas (`/coach` or `/beobachter`). */
