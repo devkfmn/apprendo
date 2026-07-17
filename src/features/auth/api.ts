@@ -21,6 +21,8 @@ import type {
   UserRole,
 } from '@/types/domain'
 
+export type InviteEmailStatus = 'pending' | 'sent' | 'failed'
+
 export interface Invite {
   code: string
   email: string
@@ -31,6 +33,11 @@ export interface Invite {
   displayName?: string | null
   used: boolean
   createdAt: string
+  /** Set by Cloud Function after send attempts. */
+  emailSentAt?: string | null
+  emailStatus?: InviteEmailStatus | null
+  emailError?: string | null
+  emailSendCount?: number
 }
 
 const now = () => new Date().toISOString()

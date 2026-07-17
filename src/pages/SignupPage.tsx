@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { BrandLogo } from '@/components/brand/BrandLogo'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,10 +16,15 @@ import { roleHome } from '@/lib/utils'
 
 export function SignupPage() {
   const navigate = useNavigate()
-  const [email, setEmail] = useState('')
+  const [searchParams] = useSearchParams()
+  const prefilledCode = (searchParams.get('code') ?? '').trim()
+  const prefilledEmail = (searchParams.get('email') ?? '').trim()
+  const emailLocked = Boolean(prefilledEmail)
+
+  const [email, setEmail] = useState(prefilledEmail)
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
-  const [inviteCode, setInviteCode] = useState('')
+  const [inviteCode, setInviteCode] = useState(prefilledCode)
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -79,6 +84,7 @@ export function SignupPage() {
               value={inviteCode}
               onChange={(e) => setInviteCode(e.target.value)}
               required
+              readOnly={Boolean(prefilledCode)}
             />
           </div>
           <div>
@@ -100,7 +106,13 @@ export function SignupPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              readOnly={emailLocked}
             />
+            {emailLocked ? (
+              <p className="mt-1 text-xs text-ink-muted">
+                Diese Adresse gehört zur Einladung und kann nicht geändert werden.
+              </p>
+            ) : null}
           </div>
           <div>
             <Label htmlFor="password">Passwort</Label>

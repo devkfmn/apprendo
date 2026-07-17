@@ -13,6 +13,7 @@ import {
   deleteInvite,
   listAllInvites,
   listUsersByRole,
+  sendInviteEmail,
 } from '@/features/admin/api'
 import {
   ADMIN_PAGE_SIZE,
@@ -29,6 +30,19 @@ const INVITE_ROLES: InviteRole[] = ['coach', 'learner', 'observer', 'admin']
 
 type StatusFilter = 'all' | 'open' | 'used'
 
+function emailStatusBadge(invite: Invite) {
+  if (invite.used) {
+    return <Badge variant="secondary">verwendet</Badge>
+  }
+  if (invite.emailStatus === 'sent') {
+    return <Badge variant="default">E-Mail gesendet</Badge>
+  }
+  if (invite.emailStatus === 'failed') {
+    return <Badge variant="warning">E-Mail fehlgeschlagen</Badge>
+  }
+  return <Badge variant="outline">noch nicht gesendet</Badge>
+}
+
 export function AdminInvitesPage() {
   const [invites, setInvites] = useState<Invite[] | null>(null)
   const [coaches, setCoaches] = useState<UserProfile[]>([])
@@ -36,6 +50,7 @@ export function AdminInvitesPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [sendingCode, setSendingCode] = useState<string | null>(null)
   const [formOpen, setFormOpen] = useState(false)
 
   const [email, setEmail] = useState('')
@@ -90,6 +105,31 @@ export function AdminInvitesPage() {
   const pageItems = paginateItems(filtered, safePage)
   const openCount = invites?.filter((invite) => !invite.used).length ?? 0
 
+  async function sendEmailFor(inviteCode: string, created = false) {
+    setSendingCode(inviteCode)
+    try {
+      const result = await sendInviteEmail(inviteCode)
+      setSuccess(
+        created
+          ? `Einladung «${inviteCode}» erstellt und an ${result.email} gesendet.`
+          : `E-Mail an ${result.email} gesendet.`,
+      )
+      await refresh()
+    } catch (reason) {
+      const message =
+        reason instanceof Error ? reason.message : 'E-Mail konnte nicht gesendet werden.'
+      if (created) {
+        setSuccess(`Einladung «${inviteCode}» erstellt.`)
+        setError(`E-Mail nicht gesendet: ${message}`)
+      } else {
+        setError(message)
+      }
+      await refresh()
+    } finally {
+      setSendingCode(null)
+    }
+  }
+
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError('')
@@ -112,14 +152,13 @@ export function AdminInvitesPage() {
         learnerIds: role === 'observer' ? learnerIds : null,
         code: code || undefined,
       })
-      setSuccess(`Einladung erstellt: Code «${invite.code}». Signup unter /signup.`)
       setEmail('')
       setDisplayName('')
       setCode('')
       setCoachId('')
       setLearnerIds([])
       setFormOpen(false)
-      await refresh()
+      await sendEmailFor(invite.code, true)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Einladung konnte nicht erstellt werden.')
     } finally {
@@ -152,7 +191,7 @@ export function AdminInvitesPage() {
     <div>
       <PageHeader
         title="Einladungen"
-        description="Offene Codes verwalten und neue Benutzer einladen."
+        description="Einladungen erstellen und per E-Mail versenden. Empfänger öffnen den Link zum Signup."
         actions={
           <Button type="button" onClick={() => setFormOpen((open) => !open)}>
             {formOpen ? 'Formular schliessen' : 'Neue Einladung'}
@@ -229,8 +268,10 @@ export function AdminInvitesPage() {
               </div>
             ) : null}
             <div className="sm:col-span-2">
-              <Button type="submit" disabled={submitting}>
-                {submitting ? 'Wird erstellt …' : 'Einladung erstellen'}
+              <Button type="submit" disabled={submitting || Boolean(sendingCode)}>
+                {submitting || sendingCode
+                  ? 'Erstellen & senden …'
+                  : 'Einladung erstellen & per E-Mail senden'}
               </Button>
             </div>
           </form>
@@ -297,24 +338,48 @@ export function AdminInvitesPage() {
                       >
                         {invite.code}
                       </button>
-                      <p className="text-xs text-ink-muted">{formatDateTime(invite.createdAt)}</p>
+                      <p className="text-xs text-ink-muted">
+                        Erstellt {formatDateTime(invite.createdAt)}
+                        {invite.emailSentAt
+                          ? ` · Gesendet ${formatDateTime(invite.emailSentAt)}`
+                          : ''}
+                      </p>
+                      {invite.emailStatus === 'failed' && invite.emailError ? (
+                        <p className="mt-1 text-xs text-danger">{invite.emailError}</p>
+                      ) : null}
                     </td>
                     <td className="hidden px-4 py-3 sm:table-cell">{roleLabel(invite.role)}</td>
-                    <td className="px-4 py-3">
-                      <Badge variant={invite.used ? 'secondary' : 'default'}>
-                        {invite.used ? 'verwendet' : 'offen'}
-                      </Badge>
-                    </td>
+                    <td className="px-4 py-3">{emailStatusBadge(invite)}</td>
                     <td className="px-4 py-3 text-right">
-                      {!invite.used ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => void remove(invite.code)}
-                        >
-                          Löschen
-                        </Button>
-                      ) : null}
+                      <div className="flex flex-wrap justify-end gap-1">
+                        {!invite.used ? (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={sendingCode === invite.code}
+                            onClick={() => {
+                              setError('')
+                              setSuccess('')
+                              void sendEmailFor(invite.code)
+                            }}
+                          >
+                            {sendingCode === invite.code
+                              ? 'Senden …'
+                              : invite.emailStatus === 'sent'
+                                ? 'Erneut senden'
+                                : 'E-Mail senden'}
+                          </Button>
+                        ) : null}
+                        {!invite.used ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => void remove(invite.code)}
+                          >
+                            Löschen
+                          </Button>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 ))}
