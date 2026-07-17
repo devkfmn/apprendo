@@ -50,6 +50,9 @@ function mapReport(id: string, data: Record<string, unknown>): LearningReport {
   if (!report.bodyMarkdown) {
     report.bodyMarkdown = blocksToMarkdown(report.blocks)
   }
+  if (!Array.isArray(report.roadmapTopicIds)) {
+    report.roadmapTopicIds = []
+  }
   return report
 }
 
@@ -90,6 +93,7 @@ export type SaveReportInput = {
   title: string
   bodyMarkdown: string
   imagePaths?: string[]
+  roadmapTopicIds?: string[]
   semesterId?: string | null
 }
 
@@ -111,6 +115,7 @@ export async function saveLearningReportDraft(
     status: alreadySubmitted ? 'submitted' : 'draft',
     bodyMarkdown: values.bodyMarkdown,
     imagePaths: values.imagePaths ?? existing?.imagePaths ?? [],
+    roadmapTopicIds: values.roadmapTopicIds ?? existing?.roadmapTopicIds ?? [],
     semesterId: values.semesterId ?? null,
     createdAt: existing?.createdAt ?? timestamp,
     updatedAt: timestamp,

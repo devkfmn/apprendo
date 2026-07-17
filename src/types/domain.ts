@@ -32,6 +32,7 @@ export interface LearningReport {
   /** @deprecated Legacy block format */
   blocks?: ReportBlock[]
   imagePaths?: string[]
+  roadmapTopicIds: string[]
   semesterId?: string | null
   createdAt: string
   updatedAt: string

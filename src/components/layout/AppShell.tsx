@@ -11,7 +11,6 @@ const learnerLinks = [
   ['Lernberichte', '/reports'],
   ['Ziele', '/goals'],
   ['Roadmap', '/roadmap'],
-  ['Historie', '/history'],
 ] as const
 
 export function AppShell({ children }: { children?: ReactNode }) {

@@ -7,11 +7,12 @@ import type { LearningReport } from '@/types/domain'
 
 type ReportListProps = {
   reports: LearningReport[]
+  topicLabels?: Map<string, string>
   loading?: boolean
   reportPath: (report: LearningReport) => string
 }
 
-export function ReportList({ reports, loading, reportPath }: ReportListProps) {
+export function ReportList({ reports, topicLabels, loading, reportPath }: ReportListProps) {
   if (loading) {
     return (
       <div className="space-y-3">
@@ -37,6 +38,11 @@ export function ReportList({ reports, loading, reportPath }: ReportListProps) {
                 <p className="mt-1 text-sm text-ink-muted">
                   Zuletzt geändert {formatDateTime(report.updatedAt)}
                 </p>
+                {report.roadmapTopicIds.length > 0 && topicLabels ? (
+                  <p className="mt-1 text-sm text-ink-muted">
+                    Themen: {report.roadmapTopicIds.map((id) => topicLabels.get(id) ?? id).join(', ')}
+                  </p>
+                ) : null}
               </div>
               <Badge variant={report.status === 'submitted' ? 'default' : 'warning'}>
                 {report.status === 'submitted' ? 'Eingereicht' : 'Entwurf'}

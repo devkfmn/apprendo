@@ -24,7 +24,6 @@ import { ReportEditPage } from '@/pages/ReportEditPage'
 import { ReportsListPage } from '@/pages/ReportsListPage'
 import { RoadmapHistoryPage } from '@/pages/RoadmapHistoryPage'
 import { RoadmapPage } from '@/pages/RoadmapPage'
-import { SemestersPage } from '@/pages/SemestersPage'
 import { SignupPage } from '@/pages/SignupPage'
 
 function RoleIndex() {
@@ -105,7 +104,6 @@ export const router = createBrowserRouter([
           { path: '/goals', element: <GoalsPage /> },
           { path: '/roadmap', element: <RoadmapPage /> },
           { path: '/roadmap/all', element: <RoadmapHistoryPage /> },
-          { path: '/history', element: <SemestersPage /> },
         ],
       },
       {
