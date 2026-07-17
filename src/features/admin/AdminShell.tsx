@@ -20,8 +20,8 @@ export function AdminShell({ children }: { children?: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-canvas">
-      <header className="border-b border-line bg-panel/90">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-4">
+      <header className="sticky top-0 z-20 border-b border-line bg-panel/95 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-3">
           <div className="flex items-center gap-3">
             <BrandLogo to={base} size="md" />
             <span className="rounded-md bg-brand-soft px-2 py-1 text-xs font-semibold text-brand">
@@ -53,8 +53,8 @@ export function AdminShell({ children }: { children?: ReactNode }) {
           </div>
         </div>
       </header>
-      <div className="mx-auto max-w-6xl px-5 py-6">
-        <nav className="mb-8 flex flex-wrap gap-1" aria-label="Admin-Navigation">
+      <div className="mx-auto max-w-7xl px-5 py-6">
+        <nav className="mb-6 flex flex-wrap gap-1" aria-label="Admin-Navigation">
           {tabs.map(([label, segment]) => {
             const href = segment ? `${base}/${segment}` : base
             return (

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { startTransition, useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardTitle } from '@/components/ui/card'
@@ -7,17 +7,27 @@ import { Label } from '@/components/ui/label'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Select } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
+import { AdminPagination } from '@/features/admin/AdminPagination'
 import {
   createInvite,
   deleteInvite,
   listAllInvites,
   listUsersByRole,
 } from '@/features/admin/api'
+import {
+  ADMIN_PAGE_SIZE,
+  clampPage,
+  paginateItems,
+} from '@/features/admin/listUtils'
+import { UserMultiPicker } from '@/features/admin/UserMultiPicker'
+import { UserPicker } from '@/features/admin/UserPicker'
 import type { Invite } from '@/features/auth/api'
 import { formatDateTime, roleLabel } from '@/lib/utils'
 import type { InviteRole, UserProfile } from '@/types/domain'
 
 const INVITE_ROLES: InviteRole[] = ['coach', 'learner', 'observer', 'admin']
+
+type StatusFilter = 'all' | 'open' | 'used'
 
 export function AdminInvitesPage() {
   const [invites, setInvites] = useState<Invite[] | null>(null)
@@ -26,6 +36,7 @@ export function AdminInvitesPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [formOpen, setFormOpen] = useState(false)
 
   const [email, setEmail] = useState('')
   const [displayName, setDisplayName] = useState('')
@@ -33,6 +44,11 @@ export function AdminInvitesPage() {
   const [coachId, setCoachId] = useState('')
   const [learnerIds, setLearnerIds] = useState<string[]>([])
   const [code, setCode] = useState('')
+
+  const [query, setQuery] = useState('')
+  const deferredQuery = useDeferredValue(query)
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('open')
+  const [page, setPage] = useState(1)
 
   async function refresh() {
     const [nextInvites, nextCoaches, nextLearners] = await Promise.all([
@@ -47,25 +63,45 @@ export function AdminInvitesPage() {
 
   useEffect(() => {
     let cancelled = false
-    void refresh()
-      .catch(() => {
-        if (!cancelled) setError('Einladungen konnten nicht geladen werden.')
-      })
+    void refresh().catch(() => {
+      if (!cancelled) setError('Einladungen konnten nicht geladen werden.')
+    })
     return () => {
       cancelled = true
     }
   }, [])
 
-  function toggleLearner(id: string) {
-    setLearnerIds((current) =>
-      current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
-    )
-  }
+  const filtered = useMemo(() => {
+    if (!invites) return []
+    const needle = deferredQuery.trim().toLowerCase()
+    return invites.filter((invite) => {
+      if (statusFilter === 'open' && invite.used) return false
+      if (statusFilter === 'used' && !invite.used) return false
+      if (!needle) return true
+      return (
+        invite.email.toLowerCase().includes(needle) ||
+        invite.code.toLowerCase().includes(needle) ||
+        roleLabel(invite.role).toLowerCase().includes(needle)
+      )
+    })
+  }, [deferredQuery, invites, statusFilter])
+
+  const safePage = clampPage(page, filtered.length)
+  const pageItems = paginateItems(filtered, safePage)
+  const openCount = invites?.filter((invite) => !invite.used).length ?? 0
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError('')
     setSuccess('')
+    if (role === 'learner' && !coachId) {
+      setError('Lernende benötigen eine Coach-Zuordnung.')
+      return
+    }
+    if (role === 'observer' && learnerIds.length === 0) {
+      setError('Beobachter benötigen mindestens eine Lernenden-Zuordnung.')
+      return
+    }
     setSubmitting(true)
     try {
       const invite = await createInvite({
@@ -82,6 +118,7 @@ export function AdminInvitesPage() {
       setCode('')
       setCoachId('')
       setLearnerIds([])
+      setFormOpen(false)
       await refresh()
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Einladung konnte nicht erstellt werden.')
@@ -102,155 +139,194 @@ export function AdminInvitesPage() {
     }
   }
 
+  async function copyCode(inviteCode: string) {
+    try {
+      await navigator.clipboard.writeText(inviteCode)
+      setSuccess(`Code «${inviteCode}» kopiert.`)
+    } catch {
+      setError('Code konnte nicht kopiert werden.')
+    }
+  }
+
   return (
     <div>
       <PageHeader
         title="Einladungen"
-        description="Erstelle Einladungscodes. Empfänger legen das Konto unter /signup an."
+        description="Offene Codes verwalten und neue Benutzer einladen."
+        actions={
+          <Button type="button" onClick={() => setFormOpen((open) => !open)}>
+            {formOpen ? 'Formular schliessen' : 'Neue Einladung'}
+          </Button>
+        }
       />
 
-      <Card className="mb-8">
-        <CardTitle>Neue Einladung</CardTitle>
-        <form onSubmit={submit} className="mt-4 grid gap-4 sm:grid-cols-2">
-          <div>
-            <Label htmlFor="invite-email">E-Mail</Label>
-            <Input
-              id="invite-email"
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              required
-            />
-          </div>
-          <div>
-            <Label htmlFor="invite-name">Anzeigename (optional)</Label>
-            <Input
-              id="invite-name"
-              value={displayName}
-              onChange={(event) => setDisplayName(event.target.value)}
-            />
-          </div>
-          <div>
-            <Label htmlFor="invite-role">Rolle</Label>
-            <Select
-              id="invite-role"
-              value={role}
-              onChange={(event) => setRole(event.target.value as InviteRole)}
-            >
-              {INVITE_ROLES.map((item) => (
-                <option key={item} value={item}>
-                  {roleLabel(item)}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div>
-            <Label htmlFor="invite-code">Code (optional)</Label>
-            <Input
-              id="invite-code"
-              value={code}
-              onChange={(event) => setCode(event.target.value)}
-              placeholder="wird sonst generiert"
-            />
-          </div>
-          {role === 'learner' && (
-            <div className="sm:col-span-2">
-              <Label htmlFor="invite-coach">Coach</Label>
-              <Select
-                id="invite-coach"
-                value={coachId}
-                onChange={(event) => setCoachId(event.target.value)}
+      {formOpen ? (
+        <Card className="mb-8">
+          <CardTitle>Neue Einladung</CardTitle>
+          <form onSubmit={submit} className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="invite-email">E-Mail</Label>
+              <Input
+                id="invite-email"
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
                 required
+              />
+            </div>
+            <div>
+              <Label htmlFor="invite-name">Anzeigename (optional)</Label>
+              <Input
+                id="invite-name"
+                value={displayName}
+                onChange={(event) => setDisplayName(event.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="invite-role">Rolle</Label>
+              <Select
+                id="invite-role"
+                value={role}
+                onChange={(event) => setRole(event.target.value as InviteRole)}
               >
-                <option value="">Coach wählen…</option>
-                {coaches.map((coach) => (
-                  <option key={coach.id} value={coach.id}>
-                    {coach.displayName} ({coach.email})
+                {INVITE_ROLES.map((item) => (
+                  <option key={item} value={item}>
+                    {roleLabel(item)}
                   </option>
                 ))}
               </Select>
             </div>
-          )}
-          {role === 'observer' && (
-            <div className="sm:col-span-2">
-              <Label>Lernende</Label>
-              <div className="mt-2 max-h-48 space-y-2 overflow-y-auto rounded-md border border-line p-3">
-                {learners.length === 0 ? (
-                  <p className="text-sm text-ink-muted">Noch keine Lernenden vorhanden.</p>
-                ) : (
-                  learners.map((learner) => (
-                    <label key={learner.id} className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={learnerIds.includes(learner.id)}
-                        onChange={() => toggleLearner(learner.id)}
-                      />
-                      <span>
-                        {learner.displayName}{' '}
-                        <span className="text-ink-muted">({learner.email})</span>
-                      </span>
-                    </label>
-                  ))
-                )}
-              </div>
+            <div>
+              <Label htmlFor="invite-code">Code (optional)</Label>
+              <Input
+                id="invite-code"
+                value={code}
+                onChange={(event) => setCode(event.target.value)}
+                placeholder="wird sonst generiert"
+              />
             </div>
-          )}
-          <div className="sm:col-span-2">
-            <Button type="submit" disabled={submitting}>
-              {submitting ? 'Wird erstellt …' : 'Einladung erstellen'}
-            </Button>
-          </div>
-        </form>
-      </Card>
+            {role === 'learner' ? (
+              <div className="sm:col-span-2">
+                <UserPicker
+                  id="invite-coach"
+                  label="Coach"
+                  users={coaches}
+                  value={coachId}
+                  onChange={setCoachId}
+                  placeholder="Coach suchen…"
+                />
+              </div>
+            ) : null}
+            {role === 'observer' ? (
+              <div className="sm:col-span-2">
+                <UserMultiPicker
+                  id="invite-learners"
+                  label="Lernende"
+                  users={learners}
+                  value={learnerIds}
+                  onChange={setLearnerIds}
+                />
+              </div>
+            ) : null}
+            <div className="sm:col-span-2">
+              <Button type="submit" disabled={submitting}>
+                {submitting ? 'Wird erstellt …' : 'Einladung erstellen'}
+              </Button>
+            </div>
+          </form>
+        </Card>
+      ) : null}
 
-      {error && <p className="mb-4 text-sm text-danger">{error}</p>}
-      {success && <p className="mb-4 text-sm text-brand">{success}</p>}
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <Input
+          className="max-w-sm"
+          placeholder="E-Mail oder Code suchen…"
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value)
+            startTransition(() => setPage(1))
+          }}
+        />
+        <Select
+          className="max-w-[12rem]"
+          value={statusFilter}
+          onChange={(event) => {
+            setStatusFilter(event.target.value as StatusFilter)
+            setPage(1)
+          }}
+        >
+          <option value="all">Alle Status</option>
+          <option value="open">Offen ({openCount})</option>
+          <option value="used">Verwendet</option>
+        </Select>
+      </div>
+
+      {error ? <p className="mb-4 text-sm text-danger">{error}</p> : null}
+      {success ? <p className="mb-4 text-sm text-brand">{success}</p> : null}
 
       {!invites ? (
         <div className="space-y-2">
-          <Skeleton className="h-16 w-full" />
-          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-14 w-full" />
+          <Skeleton className="h-14 w-full" />
         </div>
-      ) : invites.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <Card>
-          <p className="text-sm text-ink-muted">Noch keine Einladungen.</p>
+          <p className="text-sm text-ink-muted">Keine Einladungen für diese Filter.</p>
         </Card>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-line bg-panel">
-          <table className="w-full min-w-[44rem] text-left text-sm">
-            <thead className="border-b border-line text-ink-muted">
-              <tr>
-                <th className="px-4 py-3 font-medium">Code</th>
-                <th className="px-4 py-3 font-medium">E-Mail</th>
-                <th className="px-4 py-3 font-medium">Rolle</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Erstellt</th>
-                <th className="px-4 py-3 font-medium" />
-              </tr>
-            </thead>
-            <tbody>
-              {invites.map((invite) => (
-                <tr key={invite.code} className="border-b border-line/70 last:border-0">
-                  <td className="px-4 py-3 font-mono text-xs">{invite.code}</td>
-                  <td className="px-4 py-3">{invite.email}</td>
-                  <td className="px-4 py-3">{roleLabel(invite.role)}</td>
-                  <td className="px-4 py-3">
-                    <Badge variant={invite.used ? 'secondary' : 'default'}>
-                      {invite.used ? 'verwendet' : 'offen'}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3 text-ink-muted">{formatDateTime(invite.createdAt)}</td>
-                  <td className="px-4 py-3 text-right">
-                    {!invite.used && (
-                      <Button variant="ghost" size="sm" onClick={() => void remove(invite.code)}>
-                        Löschen
-                      </Button>
-                    )}
-                  </td>
+        <div className="space-y-4">
+          <div className="overflow-hidden rounded-xl border border-line bg-panel">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-line bg-canvas/60 text-ink-muted">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Einladung</th>
+                  <th className="hidden px-4 py-3 font-medium sm:table-cell">Rolle</th>
+                  <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 font-medium" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {pageItems.map((invite) => (
+                  <tr key={invite.code} className="border-b border-line/70 last:border-0">
+                    <td className="px-4 py-3">
+                      <p className="font-medium">{invite.email}</p>
+                      <button
+                        type="button"
+                        className="font-mono text-xs text-brand hover:underline"
+                        onClick={() => void copyCode(invite.code)}
+                      >
+                        {invite.code}
+                      </button>
+                      <p className="text-xs text-ink-muted">{formatDateTime(invite.createdAt)}</p>
+                    </td>
+                    <td className="hidden px-4 py-3 sm:table-cell">{roleLabel(invite.role)}</td>
+                    <td className="px-4 py-3">
+                      <Badge variant={invite.used ? 'secondary' : 'default'}>
+                        {invite.used ? 'verwendet' : 'offen'}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {!invite.used ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => void remove(invite.code)}
+                        >
+                          Löschen
+                        </Button>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <AdminPagination
+            page={safePage}
+            total={filtered.length}
+            pageSize={ADMIN_PAGE_SIZE}
+            onPageChange={setPage}
+          />
         </div>
       )}
     </div>
