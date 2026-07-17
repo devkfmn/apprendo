@@ -5,6 +5,7 @@ import {
   getDocs,
   query,
   setDoc,
+  updateDoc,
   where,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
@@ -38,6 +39,25 @@ export async function listUsersByRole(role: UserRole): Promise<UserProfile[]> {
   return snapshot.docs
     .map((item) => ({ id: item.id, ...item.data() }) as UserProfile)
     .sort((a, b) => a.displayName.localeCompare(b.displayName, 'de'))
+}
+
+/** Change the operational role (`coach` / `learner` / `observer` / `admin`). */
+export async function setUserRole(userId: string, role: UserRole): Promise<void> {
+  const patch: Record<string, unknown> = {
+    role,
+    updatedAt: now(),
+  }
+  // Ops-only accounts always carry the admin capability.
+  if (role === 'admin') patch.isAdmin = true
+  await updateDoc(doc(db, 'users', userId), patch)
+}
+
+/** Grant or revoke admin console access (`isAdmin`) without changing the app role. */
+export async function setUserAdminAccess(userId: string, isAdmin: boolean): Promise<void> {
+  await updateDoc(doc(db, 'users', userId), {
+    isAdmin,
+    updatedAt: now(),
+  })
 }
 
 export async function listAllInvites(): Promise<Invite[]> {

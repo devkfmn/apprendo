@@ -199,6 +199,18 @@ service cloud.firestore {
           )
         );
 
+      // Admin may change operational role and/or isAdmin capability.
+      allow update: if isAdmin()
+        && unchangedKeys(['id', 'email', 'inviteCode', 'createdAt'])
+        && request.resource.data.role in ['admin', 'coach', 'learner', 'observer']
+        && request.resource.data.updatedAt is string
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['role', 'isAdmin', 'updatedAt'])
+        && (
+          !('isAdmin' in request.resource.data)
+          || request.resource.data.isAdmin is bool
+        );
+
       allow delete: if false;
 
       match /contentViews/{viewId} {
