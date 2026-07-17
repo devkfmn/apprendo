@@ -137,7 +137,7 @@ export function JournalEditPage() {
   }
 
   if (loadingEntry || semestersLoading || roadmap.loading) return <p className="text-sm text-ink-muted">Laden…</p>
-  if (!activeSemester && !entry) return <><PageHeader title="Wochenrückblick" /><p className="text-sm text-ink-muted">Bitte warte, bis dein Coach ein aktives Semester eingerichtet hat.</p></>
+  if (!activeSemester && !entry) return <><PageHeader title="Wochenrückblick" /><p className="text-sm text-ink-muted">Kein aktuelles Semester für heute. Bitte prüfe mit deiner Coach-Person die Semesterdaten.</p></>
 
   const weekDate = new Date(form.watch('weekStart'))
   return (

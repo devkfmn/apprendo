@@ -1,5 +1,6 @@
 import { collection, onSnapshot, orderBy, query } from 'firebase/firestore'
 import { useEffect, useMemo, useState } from 'react'
+import { findCurrentSemester } from '@/features/semesters/defaultTimeline'
 import { db, paths } from '@/lib/firebase'
 import type { Semester } from '@/types/domain'
 
@@ -20,7 +21,7 @@ export function useSemesters(learnerId?: string) {
 
     const q = query(
       collection(db, paths.semesters(learnerId)),
-      orderBy('startDate', 'desc'),
+      orderBy('startDate', 'asc'),
     )
 
     const unsubscribe = onSnapshot(
@@ -40,8 +41,9 @@ export function useSemesters(learnerId?: string) {
     return unsubscribe
   }, [learnerId])
 
+  /** Semester whose date range contains today (not completed). */
   const activeSemester = useMemo(
-    () => semesters.find((s) => s.status === 'active') ?? null,
+    () => findCurrentSemester(semesters),
     [semesters],
   )
 

@@ -1,20 +1,17 @@
 import { Button } from '@/components/ui/button'
-import { DateInput } from '@/components/ui/date-input'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import type { Semester, SemesterGoal } from '@/types/domain'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Controller, useForm } from 'react-hook-form'
+import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 
 const goalSchema = z.object({
   semesterId: z.string().min(1, 'Semester erforderlich'),
   title: z.string().min(1, 'Titel erforderlich'),
   description: z.string().min(1, 'Beschreibung erforderlich'),
-  dueDate: z.string().optional(),
-  sortOrder: z.number().int().min(0),
 })
 
 type GoalFormValues = z.infer<typeof goalSchema>
@@ -42,7 +39,6 @@ export function GoalForm({
 }: GoalFormProps) {
   const {
     register,
-    control,
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<GoalFormValues>({
@@ -51,18 +47,17 @@ export function GoalForm({
       semesterId: goal?.semesterId ?? defaultSemesterId ?? '',
       title: goal?.title ?? '',
       description: goal?.description ?? '',
-      dueDate: goal?.dueDate ?? '',
-      sortOrder: goal?.sortOrder ?? 0,
     },
   })
 
   const submit = handleSubmit(async (values) => {
+    const semester = semesters.find((s) => s.id === values.semesterId)
     await onSubmit({
       semesterId: values.semesterId,
       title: values.title,
       description: values.description,
-      dueDate: values.dueDate?.trim() || null,
-      sortOrder: values.sortOrder,
+      dueDate: semester?.endDate ?? null,
+      sortOrder: goal?.sortOrder ?? Date.now(),
     })
   })
 
@@ -95,34 +90,6 @@ export function GoalForm({
         {errors.description ? (
           <p className="text-sm text-danger">{errors.description.message}</p>
         ) : null}
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="dueDate">Fälligkeitsdatum (optional)</Label>
-          <Controller
-            name="dueDate"
-            control={control}
-            render={({ field }) => (
-              <DateInput
-                id="dueDate"
-                value={field.value ?? ''}
-                onChange={field.onChange}
-                onBlur={field.onBlur}
-                name={field.name}
-              />
-            )}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="sortOrder">Reihenfolge</Label>
-          <Input
-            id="sortOrder"
-            type="number"
-            min={0}
-            {...register('sortOrder', { valueAsNumber: true })}
-          />
-        </div>
       </div>
 
       <div className="flex justify-end gap-2">

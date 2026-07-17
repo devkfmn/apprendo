@@ -13,6 +13,8 @@ import { GoalForm } from '@/features/goals/GoalForm'
 import { GoalList } from '@/features/goals/GoalList'
 import { createGoal, updateGoal } from '@/features/goals/api'
 import { useGoals } from '@/features/goals/useGoals'
+import { SemesterFilterSelect } from '@/features/semesters/SemesterFilterSelect'
+import { useSemesterFilter } from '@/features/semesters/useSemesterFilter'
 import { useSemesters } from '@/features/semesters/useSemesters'
 import { useAuth } from '@/features/auth/useAuth'
 import { useViewerArea } from '@/features/auth/useViewerArea'
@@ -25,9 +27,15 @@ export function CoachGoalsPage() {
   const canEdit = viewer?.canEdit ?? false
   const { semesters, activeSemester, loading: semestersLoading } = useSemesters(learnerId)
   const { goals, loading: goalsLoading } = useGoals(learnerId)
+  const { semesterId, onSemesterChange } = useSemesterFilter(
+    activeSemester?.id,
+    semestersLoading,
+  )
 
   const [formOpen, setFormOpen] = useState(false)
   const [editingGoal, setEditingGoal] = useState<SemesterGoal | null>(null)
+
+  const selected = semesters.find((s) => s.id === semesterId)
 
   const openCreate = () => {
     setEditingGoal(null)
@@ -63,39 +71,46 @@ export function CoachGoalsPage() {
       <PageHeader
         title="Ziele"
         description={
-          activeSemester
+          selected
             ? canEdit
-              ? `Ziele für ${activeSemester.label} verwalten und am Semesternende beurteilen`
-              : `Ziele für ${activeSemester.label}`
+              ? `Ziele für ${selected.label} verwalten und am Semesternende beurteilen`
+              : `Ziele für ${selected.label}`
             : 'Semesterziele für diese/n Lernende/n'
+        }
+        actions={
+          canEdit ? (
+            <Button onClick={openCreate} disabled={semesters.length === 0}>
+              <Plus className="size-4" />
+              Neues Ziel
+            </Button>
+          ) : undefined
         }
       />
 
-      {canEdit ? (
-        <div className="mb-6">
-          <Button onClick={openCreate} disabled={semesters.length === 0}>
-            <Plus className="size-4" />
-            Neues Ziel
-          </Button>
-          {semesters.length === 0 ? (
-            <p className="mt-2 text-sm text-ink-muted">
-              Zuerst ein Semester unter{' '}
-              <Link
-                to={`${viewer?.learnerBase}/semesters`}
-                className="text-brand underline"
-              >
-                Semester
-              </Link>{' '}
-              anlegen.
-            </p>
-          ) : null}
-        </div>
+      <div className="mb-6">
+        <SemesterFilterSelect
+          semesters={semesters}
+          value={semesterId}
+          onChange={onSemesterChange}
+        />
+      </div>
+      {canEdit && semesters.length === 0 ? (
+        <p className="mb-6 text-sm text-ink-muted">
+          Zuerst ein Semester unter{' '}
+          <Link
+            to={`${viewer?.learnerBase}/semesters`}
+            className="text-brand underline"
+          >
+            Semester
+          </Link>{' '}
+          anlegen.
+        </p>
       ) : null}
 
       <GoalList
         goals={goals}
         semesters={semesters}
-        activeSemesterId={activeSemester?.id}
+        filterSemesterId={semesterId}
         learnerId={learnerId ?? ''}
         actorId={profile?.id}
         loading={semestersLoading || goalsLoading}
@@ -112,7 +127,7 @@ export function CoachGoalsPage() {
             <GoalForm
               goal={editingGoal ?? undefined}
               semesters={semesters}
-              defaultSemesterId={activeSemester?.id}
+              defaultSemesterId={semesterId || activeSemester?.id}
               onSubmit={handleSubmit}
               onCancel={() => setFormOpen(false)}
             />

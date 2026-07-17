@@ -39,11 +39,13 @@ export function LearnerOverviewPage() {
   })
 
   const [learnerName, setLearnerName] = useState<string | null>(null)
+  const [lehrbeginnYear, setLehrbeginnYear] = useState<number | null>(null)
 
   useEffect(() => {
     if (!learnerId) return
     void getUserProfile(learnerId).then((user) => {
       setLearnerName(user?.displayName ?? null)
+      setLehrbeginnYear(user?.lehrbeginnYear ?? null)
     })
   }, [learnerId])
 
@@ -85,20 +87,23 @@ export function LearnerOverviewPage() {
           />
 
           <Card>
-            <CardTitle>Aktives Semester</CardTitle>
+            <CardTitle>Aktuelles Semester</CardTitle>
             {activeSemester ? (
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <span className="font-medium">{activeSemester.label}</span>
-                <Badge>Aktiv</Badge>
+                <Badge>Aktuell</Badge>
                 <span className="text-sm text-ink-muted">
                   Q{activeSemester.primaryImsQuarters.join(' & Q')}
                 </span>
               </div>
             ) : (
               <p className="mt-3 text-sm text-ink-muted">
-                Derzeit kein aktives Semester.
+                Derzeit kein aktuelles Semester (kein Datumsbereich trifft zu).
               </p>
             )}
+            {lehrbeginnYear != null ? (
+              <p className="mt-2 text-sm text-ink-muted">Lehrbeginn {lehrbeginnYear}</p>
+            ) : null}
             <Link
               to={`${base}/semesters`}
               className="mt-3 inline-block text-sm text-brand underline"

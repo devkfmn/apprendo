@@ -1,50 +1,71 @@
-import { Link } from 'react-router-dom'
+import { useMemo } from 'react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Skeleton } from '@/components/ui/skeleton'
 import { RoadmapQuarterView } from '@/features/roadmap/RoadmapQuarterView'
 import { useRoadmap } from '@/features/roadmap/useRoadmap'
 import { useAuth } from '@/features/auth/useAuth'
+import { SemesterFilterSelect } from '@/features/semesters/SemesterFilterSelect'
+import { useSemesterFilter } from '@/features/semesters/useSemesterFilter'
+import { useSemesters } from '@/features/semesters/useSemesters'
+import type { ImsQuarter } from '@/types/domain'
 
 export function RoadmapPage() {
   const { user } = useAuth()
   const learnerId = user!.uid
 
+  const { semesters, activeSemester, loading: semestersLoading } = useSemesters(learnerId)
+  const { semesterId, onSemesterChange } = useSemesterFilter(
+    activeSemester?.id,
+    semestersLoading,
+  )
+
+  const selectedSemester = useMemo(
+    () => semesters.find((s) => s.id === semesterId) ?? null,
+    [semesters, semesterId],
+  )
+
+  const imsQuarters = useMemo((): ImsQuarter[] | undefined => {
+    if (!semesterId) return undefined
+    return selectedSemester?.primaryImsQuarters ?? []
+  }, [semesterId, selectedSemester])
+
   const roadmap = useRoadmap({
     learnerId,
     role: 'learner',
     actorId: learnerId,
+    imsQuarters,
   })
+
+  const description = selectedSemester
+    ? selectedSemester.label
+    : activeSemester
+      ? `Alle Semester · Aktuell: ${activeSemester.label}`
+      : semesters.length > 0
+        ? 'Alle Semester'
+        : undefined
 
   return (
     <>
-      <PageHeader
-        title="Roadmap"
-        description={
-          roadmap.activeSemester
-            ? `Aktuelles Semester: ${roadmap.activeSemester.label}`
-            : undefined
-        }
-      />
+      <PageHeader title="Roadmap" description={description} />
 
-      <div className="mb-6 flex justify-end">
-        <Link
-          to="/roadmap/all"
-          className="inline-flex h-8 items-center rounded-md border border-line bg-panel px-3 text-xs font-semibold text-ink hover:bg-canvas"
-        >
-          Historie anzeigen
-        </Link>
+      <div className="mb-6">
+        <SemesterFilterSelect
+          semesters={semesters}
+          value={semesterId}
+          onChange={onSemesterChange}
+        />
       </div>
 
-      {roadmap.loading ? (
+      {roadmap.loading || semestersLoading ? (
         <div className="space-y-4">
           <Skeleton className="h-48 w-full" />
           <Skeleton className="h-48 w-full" />
         </div>
       ) : roadmap.error ? (
         <p className="text-sm text-danger">{roadmap.error}</p>
-      ) : !roadmap.activeSemester ? (
+      ) : semesters.length === 0 ? (
         <p className="text-sm text-ink-muted">
-          Kein aktives Semester. Bitte wende dich an deine Coach-Person.
+          Noch keine Semester. Bitte wende dich an deine Coach-Person.
         </p>
       ) : roadmap.quarters.length === 0 ? (
         <p className="text-sm text-ink-muted">

@@ -7,11 +7,11 @@ import {
   orderBy,
   query,
   updateDoc,
-  where,
   writeBatch,
 } from 'firebase/firestore'
 import { db, paths } from '@/lib/firebase'
 import type { Semester, SemesterStatus } from '@/types/domain'
+import { buildDefaultSemesters } from './defaultTimeline'
 
 const now = () => new Date().toISOString()
 
@@ -33,7 +33,7 @@ export type UpdateSemesterInput = Partial<
 >
 
 export async function listSemesters(learnerId: string): Promise<Semester[]> {
-  const q = query(collection(db, paths.semesters(learnerId)), orderBy('startDate', 'desc'))
+  const q = query(collection(db, paths.semesters(learnerId)), orderBy('startDate', 'asc'))
   const snap = await getDocs(q)
   return snap.docs.map((d) => mapSemester(d.id, d.data() as Omit<Semester, 'id'>))
 }
@@ -68,6 +68,47 @@ export async function createSemester(
   return ref.id
 }
 
+/**
+ * Create the standard 8 planned semesters from Lehrbeginn.
+ * Refuses if the learner already has any semester documents.
+ */
+export async function createDefaultSemesters(
+  learnerId: string,
+  lehrbeginnYear: number,
+  createdBy: string,
+): Promise<string[]> {
+  const existing = await getDocs(collection(db, paths.semesters(learnerId)))
+  if (!existing.empty) {
+    throw new Error('Semester existieren bereits — automatische Planung nur bei leerer Liste.')
+  }
+
+  const defaults = buildDefaultSemesters(lehrbeginnYear)
+  const batch = writeBatch(db)
+  const timestamp = now()
+  const ids: string[] = []
+
+  for (const input of defaults) {
+    const ref = doc(collection(db, paths.semesters(learnerId)))
+    ids.push(ref.id)
+    batch.set(ref, {
+      label: input.label,
+      academicYear: input.academicYear ?? null,
+      startDate: input.startDate,
+      endDate: input.endDate,
+      primaryImsQuarters: input.primaryImsQuarters,
+      status: input.status ?? 'planned',
+      summaryNote: null,
+      createdBy,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      completedAt: null,
+    })
+  }
+
+  await batch.commit()
+  return ids
+}
+
 export async function updateSemester(
   learnerId: string,
   semesterId: string,
@@ -79,38 +120,14 @@ export async function updateSemester(
   })
 }
 
-export async function activateSemester(
-  learnerId: string,
-  semesterId: string,
-): Promise<void> {
-  const activeQuery = query(
-    collection(db, paths.semesters(learnerId)),
-    where('status', '==', 'active'),
-  )
-  const activeSnap = await getDocs(activeQuery)
-  const batch = writeBatch(db)
+/** Reopen a completed semester so it can become current again by date. */
+export async function reopenSemester(learnerId: string, semesterId: string): Promise<void> {
   const timestamp = now()
-
-  for (const docSnap of activeSnap.docs) {
-    if (docSnap.id !== semesterId) {
-      batch.update(docSnap.ref, {
-        status: 'planned',
-        completedAt: null,
-        updatedAt: timestamp,
-      })
-    }
-  }
-
-  batch.update(doc(db, paths.semester(learnerId, semesterId)), {
-    status: 'active',
+  await updateDoc(doc(db, paths.semester(learnerId, semesterId)), {
+    status: 'planned',
+    completedAt: null,
     updatedAt: timestamp,
   })
-
-  await batch.commit()
-}
-
-export async function reopenSemester(learnerId: string, semesterId: string): Promise<void> {
-  await activateSemester(learnerId, semesterId)
 }
 
 export async function closeSemester(

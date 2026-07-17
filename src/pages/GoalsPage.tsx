@@ -1,8 +1,9 @@
-import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Skeleton } from '@/components/ui/skeleton'
 import { GoalList } from '@/features/goals/GoalList'
 import { useGoals } from '@/features/goals/useGoals'
+import { SemesterFilterSelect } from '@/features/semesters/SemesterFilterSelect'
+import { useSemesterFilter } from '@/features/semesters/useSemesterFilter'
 import { useSemesters } from '@/features/semesters/useSemesters'
 import { useAuth } from '@/features/auth/useAuth'
 
@@ -11,22 +12,31 @@ export function GoalsPage() {
   const learnerId = profile?.id
   const { semesters, activeSemester, loading: semestersLoading } = useSemesters(learnerId)
   const { goals, loading: goalsLoading } = useGoals(learnerId)
+  const { semesterId, onSemesterChange } = useSemesterFilter(
+    activeSemester?.id,
+    semestersLoading,
+  )
 
   const loading = semestersLoading || goalsLoading
+  const selected = semesters.find((s) => s.id === semesterId)
 
   return (
     <>
       <PageHeader
         title="Ziele"
         description={
-          activeSemester
-            ? `Semester ${activeSemester.label}`
+          selected
+            ? `Semester ${selected.label}`
             : 'Ihre Semesterziele im Überblick'
         }
       />
-      {activeSemester ? (
-        <Badge className="mb-4">Aktiv: {activeSemester.label}</Badge>
-      ) : null}
+      <div className="mb-6">
+        <SemesterFilterSelect
+          semesters={semesters}
+          value={semesterId}
+          onChange={onSemesterChange}
+        />
+      </div>
       {loading ? (
         <div className="space-y-3">
           <Skeleton className="h-20 w-full" />
@@ -36,7 +46,7 @@ export function GoalsPage() {
         <GoalList
           goals={goals}
           semesters={semesters}
-          activeSemesterId={activeSemester?.id}
+          filterSemesterId={semesterId}
           learnerId={learnerId ?? ''}
           canEdit={false}
         />

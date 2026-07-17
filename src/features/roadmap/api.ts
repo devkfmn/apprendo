@@ -3,7 +3,6 @@ import {
   doc,
   getDoc,
   getDocs,
-  limit,
   query,
   setDoc,
   updateDoc,
@@ -11,6 +10,8 @@ import {
   writeBatch,
 } from 'firebase/firestore'
 import { db, paths, progressDocId } from '@/lib/firebase'
+import { listSemesters } from '@/features/semesters/api'
+import { findCurrentSemester } from '@/features/semesters/defaultTimeline'
 import type {
   CompanyRoadmapItem,
   ImsQuarter,
@@ -71,10 +72,6 @@ export function isRoadmapTreated(progress: RoadmapProgress | null | undefined): 
   return Boolean(progress?.treated)
 }
 
-function mapSemester(id: string, data: Omit<Semester, 'id'>): Semester {
-  return { id, ...data }
-}
-
 export async function fetchSchoolItems(): Promise<SchoolRoadmapItem[]> {
   const snap = await getDocs(collection(db, paths.schoolRoadmap))
   return snap.docs
@@ -107,15 +104,8 @@ export async function fetchProgress(learnerId: string): Promise<RoadmapProgress[
 }
 
 export async function fetchActiveSemester(learnerId: string): Promise<Semester | null> {
-  const q = query(
-    collection(db, paths.semesters(learnerId)),
-    where('status', '==', 'active'),
-    limit(1),
-  )
-  const snap = await getDocs(q)
-  if (snap.empty) return null
-  const docSnap = snap.docs[0]!
-  return mapSemester(docSnap.id, docSnap.data() as Omit<Semester, 'id'>)
+  const semesters = await listSemesters(learnerId)
+  return findCurrentSemester(semesters)
 }
 
 export type ProgressPatch = {

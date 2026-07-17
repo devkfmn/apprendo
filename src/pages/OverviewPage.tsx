@@ -61,14 +61,14 @@ export function OverviewPage() {
           />
 
           <Card>
-            <CardTitle>Aktives Semester</CardTitle>
+            <CardTitle>Aktuelles Semester</CardTitle>
             {activeSemester ? (
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <span className="font-medium">{activeSemester.label}</span>
-                <Badge>Aktiv</Badge>
+                <Badge>Aktuell</Badge>
               </div>
             ) : (
-              <p className="mt-3 text-sm text-ink-muted">Derzeit kein aktives Semester.</p>
+              <p className="mt-3 text-sm text-ink-muted">Derzeit kein aktuelles Semester.</p>
             )}
           </Card>
 

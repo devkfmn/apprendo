@@ -9,6 +9,7 @@ import {
   updateDoc,
 } from 'firebase/firestore'
 import { db, paths } from '@/lib/firebase'
+import { getSemester } from '@/features/semesters/api'
 import type { GoalAssessmentGrade, SemesterGoal } from '@/types/domain'
 
 const now = () => new Date().toISOString()
@@ -121,7 +122,10 @@ export async function carryOverOpenGoals(
   fromSemesterId: string,
   toSemesterId: string,
 ): Promise<void> {
-  const goals = await listGoals(learnerId)
+  const [goals, targetSemester] = await Promise.all([
+    listGoals(learnerId),
+    getSemester(learnerId, toSemesterId),
+  ])
   const openGoals = goals.filter(
     (goal) =>
       goal.semesterId === fromSemesterId &&
@@ -144,7 +148,7 @@ export async function carryOverOpenGoals(
         semesterId: toSemesterId,
         title: goal.title,
         description: goal.description,
-        dueDate: goal.dueDate ?? null,
+        dueDate: targetSemester?.endDate ?? goal.dueDate ?? null,
         sortOrder: nextSort++,
       },
       goal.createdBy,

@@ -14,6 +14,7 @@ import {
   type SortOrderUpdate,
   type UpdateCompanyItemInput,
 } from '@/features/roadmap/api'
+import { listSemesters } from '@/features/semesters/api'
 import type {
   CompanyRoadmapItem,
   ImsQuarter,
@@ -27,7 +28,7 @@ import type {
 
 export type UseRoadmapOptions = {
   learnerId: string
-  /** When omitted, uses active semester's primaryImsQuarters */
+  /** When omitted, uses the union of primaryImsQuarters from all semesters */
   imsQuarters?: ImsQuarter[]
   includeArchivedCompany?: boolean
   role: UserRole
@@ -36,6 +37,16 @@ export type UseRoadmapOptions = {
 
 function buildProgressMap(progress: RoadmapProgress[]): Map<string, RoadmapProgress> {
   return new Map(progress.map((p) => [p.id, p]))
+}
+
+function quartersFromSemesters(semesters: Semester[]): ImsQuarter[] {
+  const set = new Set<number>()
+  for (const semester of semesters) {
+    for (const q of semester.primaryImsQuarters) {
+      set.add(q)
+    }
+  }
+  return [...set].sort((a, b) => a - b)
 }
 
 function buildQuarterViews(
@@ -75,6 +86,7 @@ export function useRoadmap({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeSemester, setActiveSemester] = useState<Semester | null>(null)
+  const [semesters, setSemesters] = useState<Semester[]>([])
   const [schoolItems, setSchoolItems] = useState<SchoolRoadmapItem[]>([])
   const [companyItems, setCompanyItems] = useState<CompanyRoadmapItem[]>([])
   const [progress, setProgress] = useState<RoadmapProgress[]>([])
@@ -91,14 +103,16 @@ export function useRoadmap({
       setLoading(true)
       setError(null)
       try {
-        const [semester, school, company, prog] = await Promise.all([
+        const [semester, allSemesters, school, company, prog] = await Promise.all([
           fetchActiveSemester(learnerId),
+          listSemesters(learnerId),
           fetchSchoolItems(),
           fetchCompanyItems(learnerId, { includeArchived: includeArchivedCompany }),
           fetchProgress(learnerId),
         ])
         if (cancelled) return
         setActiveSemester(semester)
+        setSemesters(allSemesters)
         setSchoolItems(school)
         setCompanyItems(company)
         setProgress(prog)
@@ -119,8 +133,8 @@ export function useRoadmap({
   const progressMap = useMemo(() => buildProgressMap(progress), [progress])
 
   const effectiveQuarters = useMemo(
-    () => imsQuartersOverride ?? activeSemester?.primaryImsQuarters ?? [],
-    [imsQuartersOverride, activeSemester],
+    () => imsQuartersOverride ?? quartersFromSemesters(semesters),
+    [imsQuartersOverride, semesters],
   )
 
   const quarters = useMemo(
@@ -273,6 +287,7 @@ export function useRoadmap({
     loading,
     error,
     activeSemester,
+    semesters,
     quarters,
     role,
     actorId,

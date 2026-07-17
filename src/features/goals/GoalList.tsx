@@ -2,7 +2,6 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
-import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { updateGoal } from '@/features/goals/api'
@@ -14,7 +13,7 @@ import {
 import { formatDate } from '@/lib/utils'
 import type { GoalAssessmentGrade, Semester, SemesterGoal } from '@/types/domain'
 import { Pencil } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 
 type GoalRowProps = {
   goal: SemesterGoal
@@ -73,7 +72,9 @@ function GoalRow({
             ) : null}
           </div>
           <p className="text-sm text-ink-muted">{goal.description}</p>
-          {dueLabel ? <p className="text-xs text-ink-muted">Fällig: {dueLabel}</p> : null}
+          {dueLabel ? (
+            <p className="text-xs text-ink-muted">Fällig (Semesterende): {dueLabel}</p>
+          ) : null}
           {!canAssess && goal.assessmentNote ? (
             <p className="text-xs text-ink-muted">Notiz: {goal.assessmentNote}</p>
           ) : null}
@@ -136,7 +137,8 @@ function GoalRow({
 type GoalListProps = {
   goals: SemesterGoal[]
   semesters: Semester[]
-  activeSemesterId?: string | null
+  /** Empty = all semesters; otherwise only that semester. */
+  filterSemesterId?: string
   learnerId: string
   actorId?: string
   /** Coach can edit goal content and assess. */
@@ -148,13 +150,43 @@ type GoalListProps = {
 export function GoalList({
   goals,
   semesters,
-  activeSemesterId,
+  filterSemesterId = '',
   learnerId,
   actorId,
   canEdit = false,
   loading = false,
   onEditGoal,
 }: GoalListProps) {
+  const semesterMap = useMemo(
+    () => new Map(semesters.map((s) => [s.id, s])),
+    [semesters],
+  )
+
+  const filteredGoals = useMemo(
+    () =>
+      filterSemesterId
+        ? goals.filter((g) => g.semesterId === filterSemesterId)
+        : goals,
+    [goals, filterSemesterId],
+  )
+
+  const groups = useMemo(() => {
+    if (filterSemesterId) {
+      return [{ semesterId: filterSemesterId, goals: filteredGoals }]
+    }
+    const ids = [...new Set(filteredGoals.map((g) => g.semesterId))]
+    ids.sort((a, b) => {
+      const semA = semesterMap.get(a)
+      const semB = semesterMap.get(b)
+      if (!semA || !semB) return 0
+      return semB.startDate.localeCompare(semA.startDate)
+    })
+    return ids.map((semesterId) => ({
+      semesterId,
+      goals: filteredGoals.filter((g) => g.semesterId === semesterId),
+    }))
+  }, [filterSemesterId, filteredGoals, semesterMap])
+
   if (loading) {
     return (
       <div className="space-y-3">
@@ -164,43 +196,29 @@ export function GoalList({
     )
   }
 
-  const semesterMap = new Map(semesters.map((s) => [s.id, s]))
-  const activeGoals = activeSemesterId
-    ? goals.filter((g) => g.semesterId === activeSemesterId)
-    : []
-
-  const historySemesterIds = [
-    ...new Set(
-      goals.filter((g) => g.semesterId !== activeSemesterId).map((g) => g.semesterId),
-    ),
-  ].sort((a, b) => {
-    const semA = semesterMap.get(a)
-    const semB = semesterMap.get(b)
-    if (!semA || !semB) return 0
-    return semB.startDate.localeCompare(semA.startDate)
-  })
-
-  if (!activeSemesterId && goals.length === 0) {
+  if (goals.length === 0) {
     return <p className="text-sm text-ink-muted">Noch keine Ziele vorhanden.</p>
+  }
+
+  if (filteredGoals.length === 0) {
+    return (
+      <p className="text-sm text-ink-muted">
+        Für dieses Semester sind noch keine Ziele definiert.
+      </p>
+    )
   }
 
   return (
     <div className="space-y-8">
-      <section>
-        <h3 className="mb-3 text-lg font-medium">
-          {activeSemesterId
-            ? (semesterMap.get(activeSemesterId)?.label ?? 'Aktuelles Semester')
-            : 'Ziele'}
-        </h3>
-        {activeGoals.length === 0 ? (
-          <p className="text-sm text-ink-muted">
-            {activeSemesterId
-              ? 'Für dieses Semester sind noch keine Ziele definiert.'
-              : 'Kein aktives Semester — Ziele werden angezeigt, sobald ein Semester aktiv ist.'}
-          </p>
-        ) : (
+      {groups.map(({ semesterId, goals: semesterGoals }) => (
+        <section key={semesterId}>
+          {!filterSemesterId ? (
+            <h3 className="mb-3 text-lg font-medium">
+              {semesterMap.get(semesterId)?.label ?? semesterId}
+            </h3>
+          ) : null}
           <div className="space-y-3">
-            {activeGoals.map((goal) => (
+            {semesterGoals.map((goal) => (
               <GoalRow
                 key={goal.id}
                 goal={goal}
@@ -212,41 +230,8 @@ export function GoalList({
               />
             ))}
           </div>
-        )}
-      </section>
-
-      {historySemesterIds.length > 0 ? (
-        <>
-          <Separator />
-          <section>
-            <h3 className="mb-3 text-lg font-medium">Frühere Semester</h3>
-            <div className="space-y-6">
-              {historySemesterIds.map((semesterId) => {
-                const semester = semesterMap.get(semesterId)
-                const semesterGoals = goals.filter((g) => g.semesterId === semesterId)
-                return (
-                  <div key={semesterId}>
-                    <h4 className="mb-2 text-sm font-medium text-ink-muted">
-                      {semester?.label ?? semesterId}
-                    </h4>
-                    <div className="space-y-3">
-                      {semesterGoals.map((goal) => (
-                        <GoalRow
-                          key={goal.id}
-                          goal={goal}
-                          canEditContent={false}
-                          canAssess={false}
-                          learnerId={learnerId}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </section>
-        </>
-      ) : null}
+        </section>
+      ))}
     </div>
   )
 }

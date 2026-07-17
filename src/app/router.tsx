@@ -9,7 +9,6 @@ import { CoachJournalDetailPage } from '@/pages/CoachJournalDetailPage'
 import { CoachJournalListPage } from '@/pages/CoachJournalListPage'
 import { CoachReportDetailPage } from '@/pages/CoachReportDetailPage'
 import { CoachReportsListPage } from '@/pages/CoachReportsListPage'
-import { CoachRoadmapHistoryPage } from '@/pages/CoachRoadmapHistoryPage'
 import { CoachRoadmapPage } from '@/pages/CoachRoadmapPage'
 import { CoachSemestersPage } from '@/pages/CoachSemestersPage'
 import { ForbiddenPage } from '@/pages/ForbiddenPage'
@@ -22,7 +21,6 @@ import { LoginPage } from '@/pages/LoginPage'
 import { OverviewPage } from '@/pages/OverviewPage'
 import { ReportEditPage } from '@/pages/ReportEditPage'
 import { ReportsListPage } from '@/pages/ReportsListPage'
-import { RoadmapHistoryPage } from '@/pages/RoadmapHistoryPage'
 import { RoadmapPage } from '@/pages/RoadmapPage'
 import { SignupPage } from '@/pages/SignupPage'
 
@@ -80,7 +78,6 @@ const viewerLearnerRoutes = [
   { path: 'reports/:reportId', element: <CoachReportDetailPage /> },
   { path: 'goals', element: <CoachGoalsPage /> },
   { path: 'roadmap', element: <CoachRoadmapPage /> },
-  { path: 'roadmap/all', element: <CoachRoadmapHistoryPage /> },
   { path: 'semesters', element: <CoachSemestersPage /> },
 ]
 
@@ -103,7 +100,6 @@ export const router = createBrowserRouter([
           { path: '/reports/:reportId', element: <ReportEditPage /> },
           { path: '/goals', element: <GoalsPage /> },
           { path: '/roadmap', element: <RoadmapPage /> },
-          { path: '/roadmap/all', element: <RoadmapHistoryPage /> },
         ],
       },
       {

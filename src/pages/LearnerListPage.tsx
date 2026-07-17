@@ -93,7 +93,7 @@ function LearnerCard({
         </div>
         <div className="mt-3 grid gap-2 text-sm text-ink-muted sm:grid-cols-2">
           <p>
-            Aktives Semester:{' '}
+            Aktuelles Semester:{' '}
             <span className="text-ink">{activeSemester?.label ?? 'Keines'}</span>
           </p>
           <p>

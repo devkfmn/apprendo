@@ -6,8 +6,18 @@ import type {
 
 export const semesterStatusLabels: Record<SemesterStatus, string> = {
   planned: 'Geplant',
-  active: 'Aktiv',
+  active: 'Aktuell', // legacy stored status; UI prefers date-based "Aktuell"
   completed: 'Abgeschlossen',
+}
+
+/** Badge label: current-by-date wins over stored status. */
+export function semesterBadgeLabel(
+  semester: { status: SemesterStatus; startDate: string; endDate: string },
+  isCurrent: boolean,
+): string {
+  if (semester.status === 'completed') return semesterStatusLabels.completed
+  if (isCurrent) return 'Aktuell'
+  return semesterStatusLabels.planned
 }
 
 export const goalAssessmentGrades: GoalAssessmentGrade[] = ['A', 'B', 'C', 'D', 'E']

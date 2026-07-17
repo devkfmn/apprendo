@@ -10,6 +10,7 @@ import {
   getDocs,
   query,
   setDoc,
+  updateDoc,
   where,
 } from 'firebase/firestore'
 import { auth, db } from '@/lib/firebase'
@@ -42,6 +43,17 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
 /** Use only after a validated, unused invite has created the Auth user. */
 export async function createUserProfile(profile: UserProfile): Promise<void> {
   await setDoc(doc(db, 'users', profile.id), profile)
+}
+
+/** Assigned coach may set Lehrbeginn year on a learner profile. */
+export async function updateLearnerLehrbeginn(
+  learnerId: string,
+  lehrbeginnYear: number | null,
+): Promise<void> {
+  await updateDoc(doc(db, 'users', learnerId), {
+    lehrbeginnYear,
+    updatedAt: now(),
+  })
 }
 
 export async function loginWithEmail(email: string, password: string) {

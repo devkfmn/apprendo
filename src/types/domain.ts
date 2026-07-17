@@ -55,6 +55,8 @@ export interface UserProfile {
   coachId?: string | null
   /** Used once at signup so security rules can validate against invites/{code}. */
   inviteCode?: string | null
+  /** Calendar year of Lehrbeginn; Semester 1 starts 01.08 of this year. */
+  lehrbeginnYear?: number | null
   createdAt: string
   updatedAt: string
 }

@@ -148,7 +148,24 @@ service cloud.firestore {
 
       allow update: if signedIn()
         && uid() == userId
-        && unchangedKeys(['id', 'role', 'email', 'coachId', 'inviteCode', 'createdAt']);
+        && unchangedKeys(['id', 'role', 'email', 'coachId', 'inviteCode', 'createdAt', 'lehrbeginnYear']);
+
+      // Assigned coach may set Lehrbeginn year on a learner profile.
+      // Client SDK stores numbers as float — accept int or float.
+      allow update: if isAssignedCoach(userId)
+        && resource.data.role == 'learner'
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['lehrbeginnYear', 'updatedAt'])
+        && request.resource.data.updatedAt is string
+        && (
+          request.resource.data.lehrbeginnYear == null
+          || (
+            (request.resource.data.lehrbeginnYear is int
+              || request.resource.data.lehrbeginnYear is float)
+            && request.resource.data.lehrbeginnYear >= 2000
+            && request.resource.data.lehrbeginnYear <= 2100
+          )
+        );
 
       allow delete: if false;
 
